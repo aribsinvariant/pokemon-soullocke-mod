@@ -1,0 +1,27 @@
+name: Soul Link
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+concurrency:
+  group: soullink-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build and test dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi libpng-dev pkg-config lua5.4 libmgba-dev
+      - name: Build ROM
+        run: make modern -j4
+      - name: Build mGBA test adapter
+        run: cc -shared -fPIC -O2 soullink/tests/emulator.c -lmgba -o /tmp/soullink-emulator.so
+      - name: Test relay, patching, and compiled game rules
+        env:
+          SOUL_ADAPTER: /tmp/soullink-emulator.so
+          SOUL_ROM: pokeemerald_modern.gba
+          SOUL_ELF: pokeemerald_modern.elf
+        run: python3 -m unittest discover -s soullink/tests -v
+      - name: Test Lua bridge
+        run: lua5.4 soullink/tests/test_bridge.lua
