@@ -63,7 +63,9 @@ local function receive(line)
         for i=2,7 do write(80+(i-2)*4, tonumber(words[i])) end
         write(104, tonumber(words[8]))
         lastPos = os.time()
-    else error('Unknown relay message') end
+    else
+        error('Unknown relay message ('..#line..' bytes): '..string.format('%q', line:sub(1,80)))
+    end
 end
 local function eventLine(index)
     local offset = 9376 + (index % 16)*48
@@ -96,8 +98,11 @@ callbacks:add('frame', function()
         if not fatal then console:error('Soul Link ROM/build mismatch') end
         fatal = true; write(20,3); return
     end
+    -- A bridge failure also sets connection=3. Preserve its original error instead
+    -- of misreporting it as a fresh ROM failure on every subsequent frame.
+    if fatal then write(20,3); return end
     if read(20) == 3 then
-        console:error('ROM rejected synchronization: stale save or full event queue. Load a recent in-game save for this run.')
+        console:error('ROM rejected synchronization (run='..read(24)..', queued='..(read(108)-read(112))..'). Reset the emulator and retry; keep this first error for diagnosis.')
         fatal = true
     end
     if lastRomFrame and read(12) < lastRomFrame then

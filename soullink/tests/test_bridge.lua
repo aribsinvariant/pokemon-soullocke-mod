@@ -38,3 +38,14 @@ for i=1,50 do frame() end
 assert(written:find('EVENT 1 death 511\n',1,true),written)
 assert(memory[SOUL_ADDRESS+112]==0)
 print('bridge: fragmented snapshots, partial sends, position, and event encoding passed')
+
+-- A relay error must remain the only diagnostic, not become a generic ROM error.
+local errors = {}
+console.error = function(_, message) errors[#errors+1] = message end
+packet='UNEXPECTED test payload\n'
+frame()
+for i=1,5 do frame() end
+assert(#errors == 1, 'Fatal errors must be reported once')
+assert(errors[1]:find('UNEXPECTED test payload',1,true))
+assert(errors[1]:find('23 bytes',1,true))
+print('bridge: original fatal diagnostic preserved without repeated ROM errors')

@@ -93,6 +93,8 @@ Wild encounters and starters have separate toggles. Both players use the same se
 
 ## Troubleshooting
 
+- **HTML / “Unknown relay message” / wrong server:** another service may be using port 8765. Start the relay with `python -m soullink.relay.server --host 0.0.0.0 --port 8768`, and run the connector with `python -m soullink.bridge.client --server RELAY_ADDRESS --port 8768`. Leave the emulator's local port at 8766. Existing player scripts still work. Restart mGBA if its script previously stopped on an error.
+
 - **Room already exists / UNIQUE constraint failed: rooms.id:** run `python -m soullink.relay.server --host 0.0.0.0` without `--create`, from the same directory as before. Keep your database and existing player scripts. To reset a finished run, use the quick restart instructions above.
 
 - **Waiting for connection:** confirm the relay and both connectors are running, the correct scripts are loaded, and the host address/port is reachable.

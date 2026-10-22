@@ -9,6 +9,26 @@ async def copy(reader, writer):
         await asyncio.wait_for(writer.drain(), 5)
 
 
+class WrongRelayError(Exception):
+    pass
+
+
+async def copy_relay(reader, writer):
+    # Do not forward an HTTP page (or another service's greeting) into mGBA.
+    try:
+        first = await reader.readline()
+    except ValueError as exc:
+        raise WrongRelayError('Server response exceeds the Soul Link message limit') from exc
+    if not first:
+        return
+    if not first.startswith((b'STATE ', b'ERROR ')):
+        raise WrongRelayError('The selected server is not a Soul Link relay. '
+                              'Check --server and --port; another service may be using that port.')
+    writer.write(first)
+    await asyncio.wait_for(writer.drain(), 5)
+    await copy(reader, writer)
+
+
 async def run(host, port, local_port):
     while True:
         writers = []
@@ -18,12 +38,15 @@ async def run(host, port, local_port):
             writers.append(remote_writer)
             local_reader, local_writer = await asyncio.wait_for(asyncio.open_connection('127.0.0.1', local_port), 2)
             writers.append(local_writer)
-            print('Connected to emulator and relay', flush=True)
+            print(f'Connected to emulator and server {host}:{port}; waiting for Soul Link handshake', flush=True)
             tasks = [asyncio.create_task(copy(local_reader, remote_writer)),
-                     asyncio.create_task(copy(remote_reader, local_writer))]
+                     asyncio.create_task(copy_relay(remote_reader, local_writer))]
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 task.result()
+        except WrongRelayError as exc:
+            print(f'Connection error at {host}:{port}: {exc}', flush=True)
+            return
         except (OSError, asyncio.TimeoutError) as exc:
             print(f'Waiting for emulator / relay: {exc}', flush=True)
         finally:
