@@ -48,4 +48,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           REPOSITORY: ${{ github.repository }}
-        run: gh release upload "$RELEASE_TAG" launcher/SoulLink-Windows-x64.zip --repo "$REPOSITORY" --clobber
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq 'SoulLink-Windows-x64.zip'; then
+            echo "Launcher already attached; keeping the published artifact."
+          else
+            gh release upload "$RELEASE_TAG" launcher/SoulLink-Windows-x64.zip --repo "$REPOSITORY"
+          fi
