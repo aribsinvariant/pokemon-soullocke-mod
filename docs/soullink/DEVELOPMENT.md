@@ -24,6 +24,16 @@ python -m soullink.tools.package --base /path/to/original-emerald.gba
 
 The second command also emits a BPS patch. It requires English Emerald SHA-1 `f3ae088181bf583e55daf962a92bb46f4f1d07b7`. Outputs and private room files are ignored by Git.
 
+## Launcher
+
+The Windows play launcher is described in [LAUNCHER.md](LAUNCHER.md), including executable build instructions. Its GUI uses a background asyncio worker; `Controller` owns relay/connector tasks and calls reusable script generation. Settings, credentials, and per-attempt saves are stored outside the installation directory.
+
+Launcher-created rooms record their ROM SHA-256. An additive authenticated `INFO protocol build room player token` request returns `SESSION` followed by JSON metadata (protocol, build, run, seed, rules, lock/ended state, confirmations, players online, and ROM hash), then closes. It does not occupy a gameplay slot or change the mailbox ABI. Existing HELLO/EVENT/POLL/POS clients remain compatible. Only the local hosting controller can configure the database; the INFO endpoint is read-only.
+
+UPnP tests use fake routers to cover denied discovery, private WAN addresses, mapping conflicts, renewal, cancellation, and ownership-checked cleanup. A successful mapping is not proof of Internet reachability. Actual two-PC WAN play and router interoperability remain manual acceptance checks.
+
+The Windows workflow builds and smoke-tests a frozen executable, uploads its ZIP as an Actions artifact, and attaches it when a GitHub release is published. The ZIP contains neither a ROM nor mGBA. A local GUI screenshot/smoke check can establish that Tk widgets and bundled resources load; it cannot establish a completed two-PC campaign.
+
 ## Architecture
 
 - C game hooks own rule enforcement. `MON_DATA_SOUL_ID` uses the previously unused, encrypted 16-bit field in `PokemonSubstruct0`; Pokémon record sizes are unchanged. IDs are encounter area plus one, with 512 reserved for starters and 65535 for unusable collectibles.

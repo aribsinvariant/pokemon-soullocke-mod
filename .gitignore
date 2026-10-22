@@ -65,3 +65,7 @@ dist/
 *.db-wal
 *.bps
 *.ips
+
+# Launcher binaries and packaging work
+release/
+.launcher-venv/

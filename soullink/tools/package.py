@@ -54,11 +54,12 @@ def main():
     shutil.copy2(args.rom, args.output/'emerald-soullink.gba')
     shutil.copy2(args.elf, args.output/'emerald-soullink.elf')
     root = Path(__file__).parents[2]
-    for part in ['relay', 'bridge', 'tools']:
+    for part in ['relay', 'bridge', 'tools', 'launcher']:
         shutil.copytree(root/'soullink'/part, args.output/'soullink'/part, dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns('__pycache__'))
     shutil.copy2(root/'soullink/__init__.py', args.output/'soullink/__init__.py')
     shutil.copy2(root/'docs/soullink/PLAYING.md', args.output/'README.md')
+    shutil.copy2(root/'docs/soullink/LAUNCHER.md', args.output/'LAUNCHER.md')
     shutil.copy2(root/'soullink/UPSTREAM_COMMIT', args.output/'soullink/UPSTREAM_COMMIT')
     symbols = subprocess.check_output([args.nm, '-g', str(args.elf)], text=True)
     match = re.search(r'^([0-9a-fA-F]+)\s+\w\s+gSoulLinkMailbox$', symbols, re.M)

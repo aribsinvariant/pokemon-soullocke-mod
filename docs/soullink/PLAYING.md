@@ -4,6 +4,8 @@ This mod runs two independent Emerald adventures in mGBA. Use **SELECT** in the 
 
 Build and package the game using the repository README first. The commands below can be run from the generated `dist/` directory. On Ubuntu/WSL, use `python3` in place of `python`.
 
+For a desktop interface instead of these commands, use the [Windows launcher guide](LAUNCHER.md). It manages rooms, scripts, networking, and emulator startup.
+
 ## Requirements
 
 - Two PCs with a desktop mGBA build that includes **Tools → Scripting** (0.10 or newer), plus Python 3.10 or newer.

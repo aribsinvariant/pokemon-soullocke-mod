@@ -27,6 +27,8 @@ Use `make modern`, as shown above. The original matching-ROM build target is not
 
 ## Set up multiplayer
 
+Use the [Windows GUI launcher](docs/soullink/LAUNCHER.md) to host, join with an invite, configure rules, and launch mGBA without terminal commands. Build/package the game below once, then select its `dist` folder in the launcher. A compatible mGBA build with automatic script loading is required.
+
 Package your local build and its matching bridge metadata:
 
 ```sh
@@ -50,6 +52,7 @@ Run that from the same directory as the relay database. Both players then reset 
 
 Experimental: automated tests cover the relay, bridge, and compiled game hooks, but a complete two-PC campaign still needs manual testing.
 
+- [Windows launcher](docs/soullink/LAUNCHER.md)
 - [Play guide and rules](docs/soullink/PLAYING.md)
 - [Build details and tests](docs/soullink/DEVELOPMENT.md)
 - [Contributing](CONTRIBUTING.md)

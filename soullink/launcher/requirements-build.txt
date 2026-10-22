@@ -1,0 +1,3 @@
+# Build the Windows launcher using 64-bit CPython 3.12 or 3.13.
+pyinstaller==6.22.3
+miniupnpc==2.3.3

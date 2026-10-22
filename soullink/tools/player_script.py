@@ -6,6 +6,27 @@ import subprocess
 from pathlib import Path
 
 
+def generate_script(address, room, player, token, output, local_port=8766):
+    """Generate a script from validated data, without evaluating imported Lua."""
+    if not 0x02000000 <= address < 0x02040000:
+        raise ValueError('Mailbox outside EWRAM')
+    if not room.isascii() or not room.isalnum() or not 1 <= len(room) <= 32:
+        raise ValueError('Invalid room')
+    if player not in (0, 1) or not isinstance(token, str) or not token or any(
+            c not in '0123456789abcdef' for c in token):
+        raise ValueError('Invalid player credential')
+    if not 1 <= local_port <= 65535:
+        raise ValueError('Invalid emulator port')
+    template = Path(__file__).parents[1] / 'bridge' / 'bridge.lua'
+    output = Path(output)
+    config = (f'{{room={json.dumps(room)}, player={player}, token={json.dumps(token)}, '
+              f'local_port={local_port}}}')
+    output.write_text(f'SOUL_ADDRESS = 0x{address:08x}\nSOUL_CONFIG = {config}\n' +
+                      template.read_text(), encoding='utf-8')
+    output.chmod(0o600)
+    return output
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('elf', type=Path)

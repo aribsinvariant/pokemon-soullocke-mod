@@ -64,7 +64,7 @@ class Store:
             PRIMARY KEY(room, player, seq));
         ''')
 
-    def create(self, room, seed=1, rules=DEFAULT_RULES):
+    def create(self, room, seed=1, rules=DEFAULT_RULES, rom_sha256=None):
         if not room.isalnum() or not 1 <= len(room) <= 32:
             raise ProtocolError('room must be 1-32 letters or digits')
         state = dict(run=secrets.randbelow(0x7FFFFFFE) + 1, seed=integer(seed),
@@ -72,6 +72,10 @@ class Store:
                      tokens=[secrets.token_hex(16), secrets.token_hex(16)],
                      confirmed=[False, False], notice=[0, 0], seq=[0, 0], trainers=['ff'*8]*2,
                      mons=[{}, {}], reservations=[{}, {}], failures=[], party=[[], []], proposed=[None, None])
+        if rom_sha256 is not None:
+            if len(rom_sha256) != 64 or any(c not in '0123456789abcdef' for c in rom_sha256):
+                raise ProtocolError('invalid ROM hash')
+            state['rom_sha256'] = rom_sha256
         try:
             with self.db:
                 self.db.execute('INSERT INTO rooms VALUES (?,?)', (room, json.dumps(state)))
@@ -80,6 +84,19 @@ class Store:
                 f'Room {room!r} already exists. Start the relay without --create to resume; '
                 f'use --restart {room} only after the run has ended. '
                 'Keep the existing database and player scripts.') from exc
+        return state
+
+    def configure(self, room, seed, rules):
+        """Host launcher settings share the same lock and version as game settings."""
+        with self.db:
+            self.db.execute('BEGIN IMMEDIATE')
+            state = self.get(room)
+            if state['locked']:
+                raise ProtocolError('settings are locked for this run')
+            state['seed'], state['rules'] = integer(seed), integer(rules, 0, 4095)
+            state['confirmed'] = [False, False]
+            state['version'] += 1
+            self.save(room, state)
         return state
 
     def restart(self, room, seed=None):

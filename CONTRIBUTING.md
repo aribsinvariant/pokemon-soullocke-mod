@@ -24,3 +24,5 @@ For gameplay bugs, include the build revision, enabled rules, emulator version, 
 ## Upstream
 
 The source imports pret/pokeemerald at the revision in `soullink/UPSTREAM_COMMIT`. Original setup documentation and tool license notices remain in the tree. Mod integration files are listed in `soullink/MODIFIED_FILES`. Preserve upstream attribution and existing license notices.
+
+The Windows launcher has an independent Windows build workflow. See [launcher development](docs/soullink/LAUNCHER.md#build-the-launcher-from-source). Keep executable output in the ignored `release/` directory and runtime profiles outside the checkout.

@@ -13,42 +13,69 @@ class WrongRelayError(Exception):
     pass
 
 
-async def copy_relay(reader, writer):
-    # Do not forward an HTTP page (or another service's greeting) into mGBA.
-    try:
-        first = await reader.readline()
-    except ValueError as exc:
-        raise WrongRelayError('Server response exceeds the Soul Link message limit') from exc
-    if not first:
-        return
-    if not first.startswith((b'STATE ', b'ERROR ')):
-        raise WrongRelayError('The selected server is not a Soul Link relay. '
-                              'Check --server and --port; another service may be using that port.')
-    writer.write(first)
-    await asyncio.wait_for(writer.drain(), 5)
-    await copy(reader, writer)
+def notify(callback, kind, message, **details):
+    if callback:
+        callback(dict(kind=kind, message=message, **details))
+    else:
+        print(message, flush=True)
 
 
-async def run(host, port, local_port):
+async def copy_relay(reader, writer, on_status=None):
+    first = True
+    while True:
+        try:
+            line = await reader.readline()
+        except ValueError as exc:
+            raise WrongRelayError('Server response exceeds the Soul Link message limit') from exc
+        if not line:
+            return
+        if first and not line.startswith((b'STATE ', b'ERROR ')):
+            raise WrongRelayError('The selected server is not a Soul Link relay. '
+                                  'Check the address and port; another service may be using that port.')
+        first = False
+        writer.write(line)
+        await asyncio.wait_for(writer.drain(), 5)
+        if line.startswith(b'STATE ') and on_status:
+            fields = line.split(b' ', 10)
+            if len(fields) >= 10:
+                try:
+                    online = int(fields[8]) == 1
+                    notify(on_status, 'connected' if online else 'waiting_partner',
+                           'Connected to both players' if online else 'Connected; waiting for your partner')
+                except ValueError:
+                    pass  # The ROM bridge validates the complete snapshot.
+        elif line.startswith(b'ERROR '):
+            notify(on_status, 'error', line[6:].decode('ascii', errors='replace').strip()[:240])
+            return False
+
+
+async def run(host, port, local_port, on_status=None):
     while True:
         writers = []
         tasks = []
         try:
+            notify(on_status, 'connecting', f'Connecting to relay {host}:{port}')
             remote_reader, remote_writer = await asyncio.wait_for(asyncio.open_connection(host, port), 5)
             writers.append(remote_writer)
+            notify(on_status, 'waiting_emulator', 'Waiting for the game and its Soul Link script')
             local_reader, local_writer = await asyncio.wait_for(asyncio.open_connection('127.0.0.1', local_port), 2)
             writers.append(local_writer)
-            print(f'Connected to emulator and server {host}:{port}; waiting for Soul Link handshake', flush=True)
             tasks = [asyncio.create_task(copy(local_reader, remote_writer)),
-                     asyncio.create_task(copy_relay(remote_reader, local_writer))]
+                     asyncio.create_task(copy_relay(remote_reader, local_writer, on_status))]
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
-                task.result()
+                if task.result() is False:
+                    return
+            notify(on_status, 'disconnected', 'Connection closed; retrying')
         except WrongRelayError as exc:
-            print(f'Connection error at {host}:{port}: {exc}', flush=True)
+            notify(on_status, 'error', f'Connection error at {host}:{port}: {exc}')
             return
         except (OSError, asyncio.TimeoutError) as exc:
-            print(f'Waiting for emulator / relay: {exc}', flush=True)
+            stage = 'waiting_emulator' if len(writers) else 'connecting'
+            message = ('Waiting for mGBA. The script starts after New Game or Continue.'
+                       if stage == 'waiting_emulator' else
+                       f'Cannot reach {host}:{port}. Check the address, relay, and firewall.')
+            notify(on_status, stage, message)
         finally:
             for task in tasks:
                 task.cancel()

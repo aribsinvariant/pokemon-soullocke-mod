@@ -13,6 +13,21 @@ class Relay:
         self.store = store
         self.clients = {}
         self.positions = {}
+        self.handlers = set()
+
+    async def close(self):
+        handlers = list(self.handlers)
+        for task in handlers:
+            task.cancel()
+        await asyncio.gather(*handlers, return_exceptions=True)
+
+    def session(self, room, player):
+        s = self.store.get(room)
+        return dict(protocol=PROTOCOL, build=BUILD, run=s['run'], seed=s['seed'],
+                    rules=s['rules'], locked=s['locked'], ended=s['ended'],
+                    confirmed=s['confirmed'], rom_sha256=s.get('rom_sha256'),
+                    players=[(room, p) in self.clients and
+                             time.monotonic()-self.clients[room, p][1] < 3 for p in range(2)])
 
     async def send(self, writer, line):
         writer.write((line + '\n').encode('ascii'))
@@ -34,9 +49,19 @@ class Relay:
         return 'STATE ' + ' '.join(map(str, fields)) + ' ' + s['trainers'][1-p] + ' ' + records.hex()
 
     async def handle(self, reader, writer):
+        handler = asyncio.current_task()
+        self.handlers.add(handler)
         identity = None
         try:
             hello = (await asyncio.wait_for(reader.readline(), 10)).decode('ascii').strip().split()
+            if len(hello) == 6 and hello[0] == 'INFO':
+                _, version, build, room, player, token = hello
+                if integer(version) != PROTOCOL or integer(build) != BUILD:
+                    raise ProtocolError('incompatible ROM or protocol')
+                p = integer(player, 0, 1)
+                self.store.authenticate(room, p, token)
+                await self.send(writer, 'SESSION ' + json.dumps(self.session(room, p), separators=(',', ':')))
+                return
             if len(hello) != 8 or hello[0] != 'HELLO':
                 raise ProtocolError('expected HELLO version build room player token trainer')
             _, version, build, room, player, token, trainer, run = hello
@@ -92,6 +117,7 @@ class Relay:
         except (ConnectionError, asyncio.TimeoutError):
             pass
         finally:
+            self.handlers.discard(handler)
             if identity and self.clients.get(identity, (None,))[0] is writer:
                 self.clients.pop(identity, None)
                 self.positions.pop(identity, None)
@@ -102,9 +128,14 @@ class Relay:
                 pass
 
 
-async def serve(store, host, port):
+async def start_relay(store, host, port):
     relay = Relay(store)
     server = await asyncio.start_server(relay.handle, host, port, limit=4096)
+    return relay, server
+
+
+async def serve(store, host, port):
+    relay, server = await start_relay(store, host, port)
     print(f'Soul Link relay listening on {host}:{port}', flush=True)
     async with server:
         await server.serve_forever()
