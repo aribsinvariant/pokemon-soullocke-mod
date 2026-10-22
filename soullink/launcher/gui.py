@@ -158,6 +158,8 @@ class Launcher:
         self.field(fields, 2, 'Relay TCP port', self.port, 10)
         ttk.Checkbutton(self.host_tab, text='Internet hosting — try automatic router forwarding (UPnP)',
                         variable=self.internet).pack(anchor='w', pady=(8, 4))
+        ttk.Label(self.host_tab, text='Your public address is detected when hosting starts; port forwarding is checked separately.',
+                  wraplength=790).pack(anchor='w', pady=(0, 4))
         self.rule_frame = ttk.LabelFrame(self.host_tab, text='Challenge rules', padding=8)
         self.rule_frame.pack(fill='x', pady=6)
         self.rules = []
@@ -223,6 +225,8 @@ class Launcher:
         ttk.Entry(self.address_fields, textvariable=self.address, width=25).pack(side='left', padx=8)
         ttk.Label(self.address_fields, text='Port').pack(side='left')
         ttk.Entry(self.address_fields, textvariable=self.invite_port, width=7).pack(side='left', padx=8)
+        self.refresh_address_button = self.button(self.address_fields, 'Find public IP',
+                                                 lambda: self.submit('refresh_address'), side='left', padx=(0, 8))
         self.invite_button = self.button(self.address_fields, 'Copy player 2 invite', self.copy_invite, side='left')
         ttk.Label(frame, textvariable=self.network, wraplength=860).pack(anchor='w', pady=2)
         buttons = ttk.Frame(frame)
@@ -395,6 +399,7 @@ class Launcher:
         host = active and self.profile['role'] == 'host'
         self.play_button.configure(state='normal' if active and self.info and not self.info['ended'] else 'disabled')
         self.invite_button.configure(state='normal' if host else 'disabled')
+        self.refresh_address_button.configure(state='normal' if host and self.profile.get('internet') else 'disabled')
         self.apply_button.configure(state='normal' if host and self.info and not self.info['locked'] else 'disabled')
         self.restart_button.configure(state='normal' if host and self.info and self.info['ended'] else 'disabled')
 
@@ -421,13 +426,14 @@ class Launcher:
                         self.package_path.set(event['settings'].get('package', ''))
                         self.mgba_path.set(event['settings'].get('mgba', ''))
                 elif kind == 'session':
+                    changed_session = not self.profile or self.profile['id'] != event['profile']['id']
                     self.profile = event['profile']
                     self.session_title.set(self.profile['name'] + ' — ' + self.profile['role'])
                     self.address.set(self.profile.get('advertised', self.profile['host']))
                     self.invite_port.set(str(self.profile.get('invite_port', self.profile['port'])))
                     self.settings_dirty = False
                     self.update_info(event['info'])
-                    if self.profile['role'] == 'host':
+                    if self.profile['role'] == 'host' and changed_session:
                         self.network.set(f'Manual forwarding: TCP {self.profile["port"]} → '
                                          f'{self.profile.get("lan") or "your PC LAN IP"}:{self.profile["port"]}. '
                                          'Allow this app through Windows Firewall on your home network.')

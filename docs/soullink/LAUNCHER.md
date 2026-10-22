@@ -43,6 +43,8 @@ New GUI sessions only: the first release does not import databases or saves from
 
 ## Internet connections
 
+Internet hosting fills the invite address using the router’s public IPv4 address or an HTTPS public-IP lookup (ipify, with an AWS fallback). Address detection works even when UPnP forwarding fails. Click **Find public IP** to retry, or enter an address manually. If detection fails, the launcher explains that in the network status. Your address and router-forwarding result are shown separately.
+
 UPnP requires a compatible router with UPnP enabled. The launcher will not overwrite another application's port mapping. It removes mappings it created when hosting stops; an unexpected crash can require removing a remaining mapping in your router.
 
 If automatic forwarding fails, the launcher displays the exact LAN address and TCP port for a manual router rule. Forward the chosen external TCP port to the host PC's relay TCP port. Keep the emulator's local bridge port private; the launcher selects it automatically.

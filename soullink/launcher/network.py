@@ -2,6 +2,30 @@
 import ipaddress
 import secrets
 import socket
+import urllib.request
+
+
+def is_public_ipv4(value):
+    try:
+        address = ipaddress.ip_address(value)
+        return isinstance(value, str) and address.version == 4 and address.is_global
+    except (ValueError, TypeError):
+        return False
+
+
+def public_ipv4(opener=None):
+    """Discover the public address independently of router configuration."""
+    opener = opener or urllib.request.urlopen
+    for url in ('https://api.ipify.org', 'https://checkip.amazonaws.com'):
+        try:
+            request = urllib.request.Request(url, headers={'User-Agent': 'EmeraldSoulLink/1'})
+            with opener(request, timeout=3) as response:
+                address = response.read(65).decode('ascii').strip()
+            if is_public_ipv4(address):
+                return address
+        except (OSError, ValueError, UnicodeError):
+            continue
+    return None
 
 
 def lan_address():
@@ -28,6 +52,7 @@ class PortMapping:
                 and len(entry) > 2 and entry[2] == self.description)
 
     def open(self, port):
+        external = None
         if self.factory is None:
             try:
                 import miniupnpc
@@ -62,7 +87,8 @@ class PortMapping:
             return dict(ok=True, address=external, lan=self.client,
                         message='Port configured by UPnP. Internet reachability is confirmed when your partner connects.')
         except Exception:
-            return dict(ok=False, message='UPnP could not configure this router. Use the manual forwarding details.')
+            return dict(ok=False, address=external,
+                        message='UPnP could not configure this router. Use the manual forwarding details.')
 
     def renew(self):
         if self.device and self.port and self._owned(

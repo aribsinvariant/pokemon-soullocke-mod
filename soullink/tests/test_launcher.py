@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import hashlib
+import io
 import json
 from pathlib import Path
 import socket
@@ -10,7 +11,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 from soullink.launcher.storage import GamePackage, Invite, Profiles, save_json
 from soullink.launcher.service import Controller, check_mgba, session_info
-from soullink.launcher.network import PortMapping
+from soullink.launcher.network import PortMapping, public_ipv4
 from soullink.relay.model import DEFAULT_RULES, ProtocolError
 
 
@@ -87,6 +88,28 @@ class Router:
         self.entry = None
 
 
+class PublicAddressTests(unittest.TestCase):
+    def test_external_address_detection_does_not_require_upnp(self):
+        def opener(request, timeout):
+            self.assertTrue(request.full_url.startswith('https://'))
+            self.assertEqual(timeout, 3)
+            return io.BytesIO(b'8.8.4.4\n')
+        self.assertEqual(public_ipv4(opener), '8.8.4.4')
+
+    def test_provider_failure_uses_the_next_provider(self):
+        replies = iter([OSError('unavailable'), io.BytesIO(b'8.8.4.4')])
+        def opener(*args, **kwargs):
+            result = next(replies)
+            if isinstance(result, Exception):
+                raise result
+            return result
+        self.assertEqual(public_ipv4(opener), '8.8.4.4')
+
+    def test_private_ipv6_html_and_oversized_responses_are_rejected(self):
+        for response in (b'100.64.0.1', b'10.0.0.1', b'2001:4860:4860::8888',
+                         b'<!doctype html>', b'x' * 200):
+            self.assertIsNone(public_ipv4(lambda *args, **kwargs: io.BytesIO(response)))
+
 class MappingTests(unittest.TestCase):
     def test_own_mapping_renewed_and_removed(self):
         router = Router()
@@ -121,6 +144,15 @@ class MappingTests(unittest.TestCase):
         router.discover = lambda: 0
         self.assertFalse(mapping.open(8768)['ok'])
 
+    def test_mapping_failure_preserves_router_public_address(self):
+        router = Router()
+        def denied(*args):
+            raise OSError('Router denied forwarding')
+        router.addportmapping = denied
+        result = PortMapping(lambda: router).open(8768)
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['address'], '8.8.4.4')
+
     def test_router_exception_does_not_break_local_hosting(self):
         def broken(): raise OSError('UPnP disabled')
         self.assertFalse(PortMapping(broken).open(8768)['ok'])
@@ -142,7 +174,7 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
         self.root = Path(self.tmp.name)
         self.package = game_package(self.root / 'package')
         self.events = []
-        self.host = Controller(self.root / 'host', self.events.append)
+        self.host = Controller(self.root / 'host', self.events.append, address_lookup=lambda: '8.8.4.4')
         self.guest = Controller(self.root / 'guest')
         for controller in (self.host, self.guest):
             controller.profiles.remember(package=str(self.package.directory), mgba=str(self.root / 'mgba.exe'))
@@ -241,9 +273,56 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
         self.host.profiles.save(profile)
         await self.host.resume(profile['id'])
         self.assertIsNotNone(self.host.server)
+        self.assertEqual(self.host.profile['advertised'], '8.8.4.4')
         self.assertTrue(any(e['kind'] == 'network' and 'disabled' in e['message'] for e in self.events))
         await self.host.stop()
         self.assertTrue(mapping.closed)
+
+    async def test_router_public_ip_is_used_even_when_mapping_already_exists(self):
+        class Mapping:
+            def open(self, port):
+                return dict(ok=False, address='8.8.4.4', message='Port already mapped')
+            def close(self): pass
+        await self.host.stop()
+        self.host.mapping_factory = Mapping
+        self.host.address_lookup = lambda: self.fail('Router already supplied a public IP')
+        profile = self.host.profiles.list()[0]
+        profile['internet'] = True
+        self.host.profiles.save(profile)
+        await self.host.resume(profile['id'])
+        invite = Invite.decode(await self.host.invite(self.host.profile['advertised'], self.port))
+        self.assertEqual(invite.host, '8.8.4.4')
+
+    async def test_lookup_failure_is_explained_and_retry_persists_address(self):
+        class Mapping:
+            def open(self, port): return dict(ok=False, message='No router found')
+            def close(self): pass
+        await self.host.stop()
+        self.host.mapping_factory = Mapping
+        self.host.address_lookup = lambda: None
+        profile = self.host.profiles.list()[0]
+        profile['internet'] = True
+        self.host.profiles.save(profile)
+        await self.host.resume(profile['id'])
+        self.assertEqual(self.host.profile['advertised'], '')
+        self.assertTrue(any('Public IP detection failed' in e.get('message', '') for e in self.events))
+        self.host.address_lookup = lambda: '8.8.4.4'
+        await self.host.refresh_address()
+        self.assertEqual(self.host.profiles.list()[0]['advertised'], '8.8.4.4')
+
+    async def test_manual_invite_address_survives_automatic_detection(self):
+        class Mapping:
+            def open(self, port): return dict(ok=False, message='No router found')
+            def close(self): pass
+        await self.host.invite('my.vpn.example', self.port)
+        await self.host.stop()
+        self.host.mapping_factory = Mapping
+        self.host.address_lookup = lambda: self.fail('Manual addresses must not be overwritten')
+        profile = self.host.profiles.list()[0]
+        profile['internet'] = True
+        self.host.profiles.save(profile)
+        await self.host.resume(profile['id'])
+        self.assertEqual(self.host.profile['advertised'], 'my.vpn.example')
 
     async def test_cancelled_upnp_start_cleans_up_late_mapping(self):
         started, release = threading.Event(), threading.Event()

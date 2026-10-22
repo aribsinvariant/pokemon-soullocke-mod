@@ -15,7 +15,7 @@ from soullink.relay.model import Store, PROTOCOL, BUILD, integer
 from soullink.relay.server import start_relay
 from soullink.tools.player_script import generate_script
 from .storage import GamePackage, Invite, Profiles, validate_host
-from .network import PortMapping, lan_address
+from .network import PortMapping, lan_address, is_public_ipv4, public_ipv4
 
 
 async def session_info(host, port, room, player, token):
@@ -67,10 +67,11 @@ async def check_mgba(path):
 
 
 class Controller:
-    def __init__(self, root=None, emit=None, mapping_factory=PortMapping):
+    def __init__(self, root=None, emit=None, mapping_factory=PortMapping, address_lookup=None):
         self.profiles = Profiles(root)
         self.emit_callback = emit or (lambda event: None)
         self.mapping_factory = mapping_factory
+        self.address_lookup = address_lookup or public_ipv4
         self.profile = self.store = self.relay = self.server = None
         self.poller = self.connector = self.renewal = None
         self.mapping = None
@@ -188,10 +189,15 @@ class Controller:
                     await opening  # A late mapping must be owned and cleaned up by stop().
                     raise
                 if result.get('ok'):
-                    if not profile.get('manual_address'):
-                        profile['advertised'] = result['address']
-                        self.profiles.save(profile)
                     self.renewal = asyncio.create_task(self.renew_mapping())
+                if not profile.get('manual_address'):
+                    address = result.get('address')
+                    if not is_public_ipv4(address):
+                        address = await asyncio.to_thread(self.address_lookup)
+                    profile['advertised'] = address if is_public_ipv4(address) else ''
+                    self.profiles.save(profile)
+                    if not profile['advertised']:
+                        result['message'] += ' Public IP detection failed. Enter your public IP in Invite address.'
                 self.emit('network', result['message'], result=result, lan=self._lan, port=profile['port'])
                 self.emit('session', '', profile=self.public_profile(), info=self.last_info)
         except BaseException as exc:
@@ -261,6 +267,18 @@ class Controller:
             profile['invite_port'] = profile['port']
         self.profiles.save(profile)
         self.emit('changed', 'Port updated. Resume the session and share an updated invite.')
+
+    async def refresh_address(self):
+        if not self.profile or self.profile['role'] != 'host' or not self.profile.get('internet'):
+            raise ValueError('Start an Internet host session to detect its public IP.')
+        address = await asyncio.to_thread(self.address_lookup)
+        if not is_public_ipv4(address):
+            raise ValueError('Could not detect a public IPv4 address. Enter your public IP in Invite address.')
+        self.profile['advertised'] = address
+        self.profile['manual_address'] = False
+        self.profiles.save(self.profile)
+        self.emit('session', 'Public IP refreshed. Router forwarding status is unchanged.',
+                  profile=self.public_profile(), info=await self.info())
 
     async def invite(self, address, port):
         if not self.profile or self.profile['role'] != 'host':
