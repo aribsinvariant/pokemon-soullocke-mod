@@ -6,6 +6,10 @@ Build the game locally using the instructions below. No playable ROM or compiler
 
 ## Build the .gba
 
+**Windows without WSL:** follow the [native Windows / MSYS2 guide](docs/soullink/WINDOWS.md).
+
+### Ubuntu / WSL
+
 Use **Ubuntu 24.04**, or **Ubuntu 24.04 in WSL on Windows**. Run these commands in the Ubuntu terminal. On WSL, clone into your Linux home directory for faster builds.
 
 ```sh

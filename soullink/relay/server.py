@@ -134,7 +134,11 @@ def main():
               'Reuse the same player scripts.')
         return
     if args.create:
-        state = store.create(args.create, 1 if args.seed is None else args.seed)
+        try:
+            state = store.create(args.create, 1 if args.seed is None else args.seed)
+        except ProtocolError as exc:
+            store.db.close()
+            parser.error(str(exc))
         directory = Path(args.output)
         directory.mkdir(parents=True, exist_ok=True)
         for p in range(2):

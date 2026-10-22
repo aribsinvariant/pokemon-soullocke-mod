@@ -93,6 +93,8 @@ Wild encounters and starters have separate toggles. Both players use the same se
 
 ## Troubleshooting
 
+- **Room already exists / UNIQUE constraint failed: rooms.id:** run `python -m soullink.relay.server --host 0.0.0.0` without `--create`, from the same directory as before. Keep your database and existing player scripts. To reset a finished run, use the quick restart instructions above.
+
 - **Waiting for connection:** confirm the relay and both connectors are running, the correct scripts are loaded, and the host address/port is reachable.
 - **Already connected:** close the duplicate connector or wait for the old connection to time out.
 - **Sync error:** inspect mGBA's scripting console. A wrong run, incompatible build, malformed event, or unsupported rollback stops progression. Correct the configuration and reset/reload the in-game save. Do not delete the relay database to bypass recorded outcomes.

@@ -72,8 +72,14 @@ class Store:
                      tokens=[secrets.token_hex(16), secrets.token_hex(16)],
                      confirmed=[False, False], notice=[0, 0], seq=[0, 0], trainers=['ff'*8]*2,
                      mons=[{}, {}], reservations=[{}, {}], failures=[], party=[[], []], proposed=[None, None])
-        with self.db:
-            self.db.execute('INSERT INTO rooms VALUES (?,?)', (room, json.dumps(state)))
+        try:
+            with self.db:
+                self.db.execute('INSERT INTO rooms VALUES (?,?)', (room, json.dumps(state)))
+        except sqlite3.IntegrityError as exc:
+            raise ProtocolError(
+                f'Room {room!r} already exists. Start the relay without --create to resume; '
+                f'use --restart {room} only after the run has ended. '
+                'Keep the existing database and player scripts.') from exc
         return state
 
     def restart(self, room, seed=None):

@@ -4,6 +4,8 @@ The game is based on the pinned `pret/pokeemerald` revision in `soullink/UPSTREA
 
 ## Build
 
+For Windows without WSL, follow the [MSYS2 build guide](WINDOWS.md).
+
 On Ubuntu/WSL:
 
 ```sh

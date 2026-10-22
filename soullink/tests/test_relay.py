@@ -31,6 +31,13 @@ class StateTests(unittest.TestCase):
     def catch(self, player, area=1, species=1, type=1, gender=0):
         return self.event(player, 'catch', area, species, type, gender, NAME, 1)
 
+    def test_duplicate_room_preserves_existing_run(self):
+        self.catch(0)
+        before = self.store.get('test')
+        with self.assertRaisesRegex(ProtocolError, 'without --create'):
+            self.store.create('test', seed=999)
+        self.assertEqual(self.store.get('test'), before)
+
     def test_pair_and_death_after_restart(self):
         self.assertEqual(Store.status(self.catch(0), 1), PENDING)
         self.assertEqual(Store.status(self.catch(1), 1), LINKED)
