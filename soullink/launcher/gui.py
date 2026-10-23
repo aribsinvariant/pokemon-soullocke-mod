@@ -485,10 +485,10 @@ class Launcher:
         self.worker.close(choice)
 
 
-def main():
+def main(data_root=None):
     root = tk.Tk()
     try:
-        Launcher(root)
+        Launcher(root, data_root=data_root)
     except Exception as exc:
         messagebox.showerror('Cannot start Soul Link', str(exc), parent=root)
         root.destroy()

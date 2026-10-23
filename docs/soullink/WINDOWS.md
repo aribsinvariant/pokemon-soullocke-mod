@@ -1,5 +1,7 @@
 # Build on Windows without WSL
 
+For automatic installation and a desktop shortcut, double-click **Setup-SoulLink.cmd** in the repository. See [one-step Windows setup](SETUP.md). The instructions below describe the manual build process.
+
 Use MSYS2 UCRT64 on an x64 Windows PC. MSYS2 supplies the Bash shell, Make, and Windows compiler tools used by this project's Makefiles. It does not require WSL or a Linux virtual machine. See the [MSYS2 installer and system requirements](https://www.msys2.org/).
 
 These instructions have been checked against the Makefiles and official package listings. A complete native Windows build has not been verified here; the currently verified build uses Ubuntu's ARM GCC 13 toolchain.

@@ -1,4 +1,5 @@
 """PyInstaller entry point. --smoke-test writes a report without opening a window."""
+import argparse
 import json
 from pathlib import Path
 import sys
@@ -30,12 +31,16 @@ def smoke_test(output):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) == 3 and sys.argv[1] == '--smoke-test':
+    parser = argparse.ArgumentParser(description='Emerald Soul Link launcher')
+    parser.add_argument('--smoke-test', type=Path)
+    parser.add_argument('--data-root', type=Path)
+    args = parser.parse_args()
+    if args.smoke_test:
         try:
-            smoke_test(sys.argv[2])
+            smoke_test(args.smoke_test)
         except Exception as exc:
-            Path(sys.argv[2]).write_text(json.dumps(dict(ok=False, error=str(exc))), encoding='utf-8')
+            args.smoke_test.write_text(json.dumps(dict(ok=False, error=str(exc))), encoding='utf-8')
             raise
     else:
         from soullink.launcher.gui import main
-        main()
+        main(data_root=args.data_root)

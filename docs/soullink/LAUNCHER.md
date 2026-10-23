@@ -4,6 +4,8 @@ The launcher handles rooms, private invites, player scripts, the connector, and 
 
 ## Get the app
 
+For automatic ROM building and installation, extract the repository source and double-click **Setup-SoulLink.cmd**. It installs the tools, builds the game and launcher, installs compatible mGBA, configures the paths, and creates a desktop shortcut. See [one-step setup](SETUP.md). The manual setup below is for using the launcher ZIP separately.
+
 Download `SoulLink-Windows-x64.zip` from a published repository release, or the **SoulLink-Windows-x64** artifact of the [Windows launcher workflow](https://github.com/aribsinvariant/pokemon-soullocke-mod/actions/workflows/launcher.yml). Workflow artifact downloads may require signing in to GitHub. The ZIP contains `SoulLink.exe`; the executable includes Python and the required runtime libraries.
 
 ## One-time setup

@@ -1,0 +1,35 @@
+name: Windows one-step setup
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  setup:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the full user setup with Windows PowerShell
+        shell: powershell
+        run: |
+          .\soullink\setup\windows.ps1 -BuildRoot C:\slsetup -InstallRoot "$env:RUNNER_TEMP\Soul Link" -NoLaunch -NoShortcut
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check installed package, emulator, and packaged launcher
+        shell: powershell
+        run: |
+          $settings = Get-Content "$env:RUNNER_TEMP\Soul Link\settings.json" | ConvertFrom-Json
+          if (-not (Test-Path "$($settings.package)\emerald-soullink.gba")) { throw 'Installed ROM missing' }
+          $help = & $settings.mgba --help 2>&1 | Out-String
+          if ($help -notmatch '--script') { throw 'Installed mGBA lacks script support' }
+          $exe = Join-Path (Split-Path $settings.package) 'SoulLink.exe'
+          $report = "$env:RUNNER_TEMP\installed-smoke.json"
+          $process = Start-Process -FilePath $exe -ArgumentList @('--smoke-test', $report) -PassThru -Wait
+          if ($process.ExitCode -ne 0 -or -not (Get-Content $report | ConvertFrom-Json).ok) { throw 'Installed launcher smoke test failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-setup-log
+          path: C:/slsetup/setup.log

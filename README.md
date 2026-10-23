@@ -4,6 +4,14 @@ Source for a two-player Emerald mod with linked Pokémon, shared permanent death
 
 Build the game locally using the instructions below. No playable ROM or compiler output is included in this repository.
 
+## One-step Windows setup
+
+Download and extract this repository's source ZIP (or use your existing checkout), then double-click **`Setup-SoulLink.cmd`**. Leave the setup window open until it finishes.
+
+Setup installs the build tools, builds the ROM and launcher, downloads a compatible mGBA development build, configures everything, and opens the launcher. It creates an **Emerald Soul Link** desktop shortcut for future use. No original Emerald ROM, WSL, or manual Python setup is required. Both players should use the same source version.
+
+Requires Intel/AMD 64-bit Windows 10/11, Internet access, and several GB of free space. The first build takes longer than later launches. See [setup details and troubleshooting](docs/soullink/SETUP.md).
+
 ## Build the .gba
 
 **Windows without WSL:** follow the [native Windows / MSYS2 guide](docs/soullink/WINDOWS.md).
