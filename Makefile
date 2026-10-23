@@ -372,8 +372,14 @@ ifeq ($(MODERN),0)
 LD_SCRIPT := ld_script.ld
 LD_SCRIPT_DEPS := $(OBJ_DIR)/sym_bss.ld $(OBJ_DIR)/sym_common.ld $(OBJ_DIR)/sym_ewram.ld $(OBJ_DIR)/memory.ld
 else
-LD_SCRIPT := ld_script_modern.ld
+LD_SCRIPT := $(OBJ_DIR)/ld_script.ld
 LD_SCRIPT_DEPS := $(OBJ_DIR)/memory.ld
+
+# Some native Windows binutils versions incorrectly reject INCLUDE scripts as
+# duplicates (binutils PR 24576). Inline the generated memory layout so the
+# modern linker opens only one script, preserving its contents and order.
+$(LD_SCRIPT): ld_script_modern.ld $(OBJ_DIR)/memory.ld
+	awk 'FNR == NR { memory = memory $$0 ORS; next } $$0 == "INCLUDE \"memory.ld\"" { printf "%s", memory; next } { print }' $(OBJ_DIR)/memory.ld $< > $@
 endif
 
 # Final rules

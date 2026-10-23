@@ -91,3 +91,4 @@ python -m soullink.relay.server --host 0.0.0.0
 - **Missing `libc.a` or `libnosys.a`:** install the ARM newlib package. `arm-none-eabi-gcc -mthumb -print-file-name=libc.a` should return a full path, not just `libc.a`.
 - **Build fails after changing compilers:** run `make clean`, then repeat the build command. Keep builds from different environments in separate checkouts.
 - **Other compiler/linker errors:** record `arm-none-eabi-gcc --version` and the first error. MSYS2 packages roll forward; newer compiler versions may expose compatibility problems or change RAM usage. Do not bypass linker memory-limit errors.
+- **Linker says `memory.ld` appears multiple times:** update to the latest source and rerun setup. Some Windows binutils versions falsely reject included linker scripts. The modern build now generates a self-contained linker script to avoid this bug.
