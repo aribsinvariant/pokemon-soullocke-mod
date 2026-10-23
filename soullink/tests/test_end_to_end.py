@@ -52,6 +52,12 @@ class EndToEndTests(unittest.IsolatedAsyncioTestCase):
                         await asyncio.sleep(0.01)
                     self.fail('timed out waiting for end-to-end synchronization; connection states: '+str([t.read(t.box+20) for t in emulators]))
                 await tick_until(lambda:all(t.read(t.box+20)==2 for t in emulators))
+                # Simulate a long focus pause: Python/relay keep running while
+                # neither emulator produces frame callbacks. Both must reconnect
+                # after the relay's idle timeout without losing the run.
+                await asyncio.sleep(5.2)
+                self.assertFalse(relay.clients)
+                await tick_until(lambda:all(t.read(t.box+20)==2 for t in emulators))
                 for t in emulators:t.call('SoulLink_SendSettings',97,1,1)
                 await tick_until(lambda:all(t.read(t.box+40)==1 for t in emulators))
                 for t in emulators:t.mon()

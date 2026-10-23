@@ -3,8 +3,11 @@ import base64
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import socket
+import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -236,6 +239,9 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(Path(args[2]).exists())
             rom = Path(args[-1])
             self.assertIn(f'savegamePath={rom.parent}', args)
+            self.assertIn('pauseOnFocusLost=0', args)
+            self.assertNotEqual(self.host.emulator.kwargs['stdout'], subprocess.DEVNULL)
+            self.assertTrue(list(rom.parent.glob('mgba-*.log')))
             save = rom.with_suffix('.sav')
             save.write_bytes(b'first attempt progress')
             await self.host.close_emulator()
@@ -257,6 +263,60 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotEqual(next_rom.parent, rom.parent)
             self.assertFalse(next_rom.with_suffix('.sav').exists())
             self.assertEqual(save.read_bytes(), b'first attempt progress')
+
+    async def test_unexpected_emulator_exit_reports_code_and_keeps_host_running(self):
+        original_run = (await self.host.info())['run']
+        log = self.root / 'emulator.log'
+        with log.open('wb') as output:
+            process = subprocess.Popen([sys.executable, '-c',
+                       "import sys; print('native failure diagnostic', flush=True); sys.exit(7)"],
+                       stdout=output, stderr=subprocess.STDOUT)
+        self.host.emulator = process
+        try:
+            await asyncio.wait_for(self.host.watch_emulator(process, log), 5)
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+        diagnostic = next(e['message'] for e in self.events if e['kind'] == 'emulator_exit')
+        self.assertIn('unexpectedly', diagnostic)
+        self.assertIn('7', diagnostic)
+        self.assertIn(str(log), diagnostic)
+        self.assertIn('native failure diagnostic', log.read_text())
+        self.assertIsNotNone(self.host.server)
+        self.assertEqual((await self.host.info())['run'], original_run)
+
+    async def test_keyboard_mode_filters_child_controllers_and_preserves_parent_environment(self):
+        with patch.dict(os.environ, SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT='existing-filter'), \
+             patch('soullink.launcher.service.check_mgba', AsyncMock(return_value=self.root / 'mgba.exe')), \
+             patch('soullink.launcher.service.subprocess.Popen', Emulator):
+            await self.host.play()
+            self.assertEqual(self.host.emulator.kwargs['env']['SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT'],
+                             '0xffff/0xffff')
+            self.assertEqual(os.environ['SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT'], 'existing-filter')
+            await self.host.close_emulator()
+            self.host.profiles.remember(keyboard_only=False)
+            await self.host.play()
+            self.assertEqual(self.host.emulator.kwargs['env']['SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT'],
+                             'existing-filter')
+
+    async def test_setup_remembers_gamepad_opt_out(self):
+        emulator = self.root / 'mgba.exe'
+        with patch('soullink.launcher.service.check_mgba', AsyncMock(return_value=emulator)):
+            await self.guest.setup(self.package.directory, emulator, keyboard_only=False)
+        self.assertFalse(Profiles(self.root / 'guest').settings['keyboard_only'])
+
+    async def test_stopping_session_cancels_monitor_and_leaves_game_running(self):
+        process = Emulator(['mgba'])
+        self.host.emulator = process
+        monitor = asyncio.create_task(self.host.watch_emulator(process, self.root / 'mgba.log'))
+        self.host.emulator_monitor = monitor
+        await asyncio.sleep(0)
+        await self.host.stop(close_game=False)
+        self.assertTrue(monitor.cancelled())
+        self.assertIsNone(self.host.emulator_monitor)
+        self.assertIsNone(process.poll())
+        self.assertFalse(any(e['kind'] == 'emulator_exit' for e in self.events))
 
     async def test_internet_host_falls_back_and_cleans_up_mapping(self):
         class Mapping:

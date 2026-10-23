@@ -23,6 +23,9 @@ local function send(line)
     outgoing = outgoing .. line .. '\n'
 end
 local function disconnected()
+    -- mGBA keeps a frame-poll callback for each accepted socket. Dropping the
+    -- Lua reference alone leaves that callback and socket alive across retries.
+    if peer then peer:close() end
     peer = nil
     incoming, outgoing = '', ''
     write(20, fatal and 3 or 0)
@@ -123,17 +126,23 @@ callbacks:add('frame', function()
         -- Bound work per emulator frame; handle partial TCP sends and receives.
         if peer:hasdata() then
             local data, problem = peer:receive(32768)
-            if not data or #data == 0 then disconnected(); return end
-            incoming = incoming .. data
-            assert(#incoming <= 131072, 'Relay input queue overflow')
-            for count=1,4 do
-                local newline = incoming:find('\n',1,true)
-                if not newline then break end
-                local line = incoming:sub(1,newline-1)
-                incoming = incoming:sub(newline+1)
-                receive(line)
-                if not peer then return end
+            if not data then
+                if problem ~= socket.ERRORS.AGAIN then disconnected(); return end
+            elseif #data == 0 then
+                disconnected(); return
+            else
+                incoming = incoming .. data
+                assert(#incoming <= 131072, 'Relay input queue overflow')
             end
+        end
+        -- Drain already-buffered lines even if no new bytes arrive this frame.
+        for count=1,4 do
+            local newline = incoming:find('\n',1,true)
+            if not newline then break end
+            local line = incoming:sub(1,newline-1)
+            incoming = incoming:sub(newline+1)
+            receive(line)
+            if not peer then return end
         end
         if os.time() - lastState > 3 then disconnected(); return end
         if os.time() - lastPos > 2 then write(104,0) end

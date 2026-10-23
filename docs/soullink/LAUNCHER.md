@@ -16,6 +16,8 @@ Download `SoulLink-Windows-x64.zip` from a published repository release, or the 
 
 Both players must use the same built game package. The launcher checks its checksum against the host's invite.
 
+**Use keyboard controls only** is enabled by default to avoid an mGBA scripting/controller deadlock when clicking the window or switching applications. It filters controller devices for the launched emulator only. To use a gamepad, turn it off and click **Verify and save setup** before hosting or resuming a session. Your system controller settings are not changed.
+
 ## Host
 
 1. Open **Host**, enter a session name, and choose a seed and challenge rules. The default TCP port is **8768**.
@@ -63,6 +65,8 @@ If the router reports a private/CGNAT WAN address, an additional router or the I
 - **Wrong build:** both players must select the same game package. Regenerate the package after changing the ROM.
 - **Player already connected:** close the duplicate game/connector and wait a few seconds before trying again.
 - **Waiting for the game:** choose New Game or Continue. The script starts communicating when the ROM initializes Soul Link.
+- **mGBA freezes when clicked or when switching windows:** enable **Use keyboard controls only** in **Game setup**, save setup, and relaunch. Windows testing reproduced a scripting/gamepad input-lock deadlock in mGBA 0.11-9157-fd9dc5c2c, including with Software (Qt) rendering. See [the reproduction report](FOCUS-FREEZE.md). The launcher also disables pausing on focus loss to keep synchronization running.
+- **mGBA exits unexpectedly:** **Diagnostics** shows its exit code and the path to its output log. Each launch writes a separate `mgba-*.log` in the saved attempt folder. Keep the log from the failing launch. Normal window closure is reported separately; hosting stays running so you can click **Play** and load your in-game save.
 - **Sync stopped:** inspect **Diagnostics**. Avoid loading emulator save states. Run resets require closing the old game and launching the new attempt.
 
 Local profiles, credentials, databases, scripts, and saves are stored in `%LOCALAPPDATA%\EmeraldSoulLink`. Open that folder from **Saved sessions**. Keep it when updating the app. Diagnostics omit credentials; invites remain private.

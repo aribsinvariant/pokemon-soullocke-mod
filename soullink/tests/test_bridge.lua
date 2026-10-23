@@ -1,7 +1,9 @@
 -- Exercise the actual bridge with fragmented messages and partial socket writes.
 SOUL_ADDRESS=0x02000000
 SOUL_CONFIG={room='room',player=0,token='secret',local_port=8766}
-local memory, frame, accepted, packet, written = {}, nil, false, nil, ''
+local memory, frame, reset, accepted, packet, written = {}, nil, nil, false, nil, ''
+local now, closed = 1000, 0
+os.time = function() return now end
 local function w(offset,value) memory[SOUL_ADDRESS+offset]=value end
 emu={
  read32=function(_,a) return memory[a] or 0 end,
@@ -10,11 +12,16 @@ emu={
  write8=function(_,a,v) memory[a]=v end,
 }
 console={log=function() end,error=function(_,s) error(s) end}
-callbacks={add=function(_,kind,fn) if kind=='frame' then frame=fn end end}
+callbacks={add=function(_,kind,fn) if kind=='frame' then frame=fn elseif kind=='reset' then reset=fn end end}
 local peer={
  hasdata=function() return packet~=nil end,
- receive=function() local p=packet;packet=nil;return p end,
+ receive=function()
+   local p=packet;packet=nil
+   if p==false then return nil,'again' end
+   return p
+ end,
  send=function(_,s) local n=math.min(19,#s);written=written..s:sub(1,n);return n end,
+ close=function() closed=closed+1 end,
 }
 socket={ERRORS={AGAIN='again'},bind=function() return {
  listen=function() return 0 end,
@@ -38,6 +45,23 @@ for i=1,50 do frame() end
 assert(written:find('EVENT 1 death 511\n',1,true),written)
 assert(memory[SOUL_ADDRESS+112]==0)
 print('bridge: fragmented snapshots, partial sends, position, and event encoding passed')
+
+-- Finish buffered messages without needing another packet to wake the parser.
+packet=string.rep('NOTICE 0\n',4)..'NOTICE 1\n'
+frame();assert(memory[SOUL_ADDRESS+144]==0)
+frame();assert(memory[SOUL_ADDRESS+144]==1)
+-- A nonblocking read can race readiness; AGAIN must preserve the connection.
+packet=false;frame();assert(closed==0)
+-- Repeated focus pauses/reconnections must release the previous socket.
+for i=1,8 do
+    now=now+4;frame()
+    assert(closed==i, 'Timed-out connection must close exactly once')
+    accepted=false;frame()
+end
+reset();assert(closed==9, 'Reset must close the active connection')
+reset();assert(closed==9, 'Reset without a peer must not close twice')
+accepted=false;frame()
+print('bridge: buffered input, nonblocking reads, timeout reconnections, and reset cleanup passed')
 
 -- A relay error must remain the only diagnostic, not become a generic ROM error.
 local errors = {}

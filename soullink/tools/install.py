@@ -51,7 +51,9 @@ async def install(package, launcher, emulator_directory, root=None, create_short
         GamePackage.load(game)
         await check_mgba(emulator)
         executable = destination / 'SoulLink.exe'
-        Profiles(root).remember(package=str(game), mgba=str(emulator))
+        profiles = Profiles(root)
+        profiles.remember(package=str(game), mgba=str(emulator),
+                          keyboard_only=profiles.settings.get('keyboard_only', True))
     except BaseException:
         shutil.rmtree(destination)
         raise

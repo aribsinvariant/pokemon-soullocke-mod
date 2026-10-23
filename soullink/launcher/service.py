@@ -10,6 +10,7 @@ import secrets
 import shutil
 import socket
 import subprocess
+import time
 from soullink.bridge.client import run as connect
 from soullink.relay.model import Store, PROTOCOL, BUILD, integer
 from soullink.relay.server import start_relay
@@ -76,6 +77,7 @@ class Controller:
         self.poller = self.connector = self.renewal = None
         self.mapping = None
         self.emulator = None
+        self.emulator_monitor = None
         self.last_info = None
         self.active_run = None
         self._last_status = None
@@ -97,10 +99,10 @@ class Controller:
             self._last_status = status
             self.emit('connection', event['message'], state=event['kind'])
 
-    async def setup(self, package_directory, emulator):
+    async def setup(self, package_directory, emulator, keyboard_only=True):
         package = await asyncio.to_thread(GamePackage.load, package_directory)
         path = await check_mgba(emulator)
-        self.profiles.remember(package=str(package.directory), mgba=str(path))
+        self.profiles.remember(package=str(package.directory), mgba=str(path), keyboard_only=bool(keyboard_only))
         self.emit('setup', 'Game package and mGBA verified')
         return package
 
@@ -321,12 +323,48 @@ class Controller:
             local_port = sock.getsockname()[1]
         script = generate_script(package.mailbox, p['room'], 0 if p['role'] == 'host' else 1,
                                  p['token'], directory / 'player.lua', local_port)
-        self.emulator = subprocess.Popen([str(mgba), '--script', str(script),
-                              '-C', f'savegamePath={directory}', '-C', f'savestatePath={directory}', str(rom)],
-                              cwd=str(directory), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        await self.cancel_emulator_monitor()
+        log = directory / f'mgba-{time.time_ns()}.log'
+        environment = dict(os.environ)
+        if self.profiles.settings.get('keyboard_only', True):
+            # SDL's allow-list excludes real controllers using a nonmatching USB ID.
+            # Avoids mGBA's scripting/gamepad input-lock deadlock on focus changes;
+            # affects this child only, leaving system devices/settings untouched.
+            environment['SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT'] = '0xffff/0xffff'
+        # A real file cannot fill a pipe and block mGBA. The child retains its
+        # inherited handle after this parent-side handle is closed.
+        with log.open('wb') as output:
+            self.emulator = subprocess.Popen([str(mgba), '--script', str(script),
+                                  '-C', 'pauseOnFocusLost=0', '-C', 'logToStdout=1',
+                                  '-C', f'savegamePath={directory}', '-C', f'savestatePath={directory}', str(rom)],
+                                  cwd=str(directory), stdout=output, stderr=subprocess.STDOUT, env=environment)
+        self.emulator_monitor = asyncio.create_task(self.watch_emulator(self.emulator, log))
         self.active_run = info['run']
         self.connector = asyncio.create_task(connect(p['host'], p['port'], local_port, self.bridge_status))
         self.emit('launched', 'mGBA launched. Start New Game or Continue; confirm the rules with SELECT.')
+        self.emit('diagnostic', f'mGBA output log: {log}')
+
+    async def watch_emulator(self, process, log):
+        # Poll asynchronously so leaving mGBA open never leaves a blocked worker
+        # thread keeping the launcher alive during shutdown.
+        while process.poll() is None:
+            await asyncio.sleep(0.5)
+        if self.emulator is not process:
+            return
+        await self.disconnect()
+        code = process.returncode
+        if code == 0:
+            self.emit('emulator_exit', 'mGBA closed. Click Play to continue from your in-game save.')
+        else:
+            formatted = f'0x{code & 0xffffffff:08X}' if os.name == 'nt' else str(code)
+            self.emit('emulator_exit', f'mGBA exited unexpectedly ({formatted}). Output log: {log}. '
+                      'Click Play to continue from your in-game save.')
+
+    async def cancel_emulator_monitor(self):
+        if self.emulator_monitor:
+            self.emulator_monitor.cancel()
+            await asyncio.gather(self.emulator_monitor, return_exceptions=True)
+            self.emulator_monitor = None
 
     async def restart(self, seed):
         if not self.store:
@@ -346,6 +384,7 @@ class Controller:
         self._last_status = None
 
     async def close_emulator(self):
+        await self.cancel_emulator_monitor()
         if self.emulator_running():
             self.emulator.terminate()
             try:
@@ -355,6 +394,7 @@ class Controller:
                 await asyncio.to_thread(self.emulator.wait)
 
     async def stop(self, close_game=False):
+        await self.cancel_emulator_monitor()
         for name in ('poller', 'renewal'):
             task = getattr(self, name)
             if task:

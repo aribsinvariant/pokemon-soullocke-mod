@@ -129,6 +129,7 @@ class Launcher:
     def build_setup(self):
         self.package_path = tk.StringVar()
         self.mgba_path = tk.StringVar()
+        self.keyboard_only = tk.BooleanVar(value=True)
         fields = ttk.Frame(self.setup_tab)
         fields.pack(fill='x')
         self.field(fields, 0, 'Built game folder', self.package_path)
@@ -140,6 +141,10 @@ class Launcher:
         ttk.Label(self.setup_tab, wraplength=790, text='Choose a desktop mGBA build with --script support. '
                   'Older releases such as 0.10.5 cannot load the player script automatically.').pack(anchor='w', pady=(0, 12))
         self.button(self.setup_tab, 'Verify and save setup', self.setup, anchor='w')
+        ttk.Checkbutton(self.setup_tab, text='Use keyboard controls only (avoids controller-related freezes)',
+                        variable=self.keyboard_only).pack(anchor='w', pady=8)
+        ttk.Label(self.setup_tab, text='Turn this off to use a gamepad. Stop the session before saving setup changes.',
+                  wraplength=790).pack(anchor='w')
         ttk.Button(self.setup_tab, text='Open mGBA downloads', command=lambda: webbrowser.open('https://mgba.io/downloads.html')).pack(anchor='w', pady=8)
         ttk.Label(self.setup_tab, wraplength=790, text='Game compilation is a separate setup step. This launcher '
                   'does not include a ROM or emulator. No Python installation is needed for the packaged Windows app.').pack(anchor='w', pady=8)
@@ -279,7 +284,7 @@ class Launcher:
         if self.profile:
             messagebox.showinfo('Stop session first', 'Stop the current session before changing the game setup.', parent=self.root)
             return
-        self.submit('setup', self.package_path.get(), self.mgba_path.get())
+        self.submit('setup', self.package_path.get(), self.mgba_path.get(), self.keyboard_only.get())
 
     def host(self):
         seed = self.numeric(self.seed, 'Seed')
@@ -411,7 +416,7 @@ class Launcher:
                 message = event.get('message', '')
                 if message:
                     self.log.append(f'{datetime.now():%H:%M:%S} {message}')
-                    if kind not in ('network', 'info'):
+                    if kind not in ('network', 'info', 'diagnostic'):
                         self.status.set(message)
                 if kind == 'profiles':
                     self.saved = event['profiles']
@@ -425,6 +430,7 @@ class Launcher:
                     if not self.package_path.get():
                         self.package_path.set(event['settings'].get('package', ''))
                         self.mgba_path.set(event['settings'].get('mgba', ''))
+                        self.keyboard_only.set(event['settings'].get('keyboard_only', True))
                 elif kind == 'session':
                     changed_session = not self.profile or self.profile['id'] != event['profile']['id']
                     self.profile = event['profile']

@@ -49,6 +49,10 @@ class InstallTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(Profiles(self.root).settings['custom'], 'keep')
         self.assertEqual(Profiles(self.root).list(), [self.profile])
         self.assertEqual(self.save.read_bytes(), b'precious save')
+        self.assertTrue(Profiles(self.root).settings['keyboard_only'])
+        Profiles(self.root).remember(keyboard_only=False)
+        await self.run_install()
+        self.assertFalse(Profiles(self.root).settings['keyboard_only'])
 
     @patch('soullink.tools.install.check_mgba', new_callable=AsyncMock)
     async def test_failed_installed_emulator_check_keeps_previous_setup(self, check):
