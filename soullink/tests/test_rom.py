@@ -90,6 +90,41 @@ class RomTests(unittest.TestCase):
         self.call('BoxMonToMon',self.party,self.party+100)
         self.assertEqual(self.call('GetMonData3',self.party+100,self.fields['MON_DATA_SOUL_ID'],0),512)
 
+    def test_link_revives_pending_zero_hp_only_at_safe_overworld(self):
+        self.mon()
+        self.write(self.party+86,0,2)  # A game routine persisted the masked pending HP.
+        self.write(self.box+160+511*18+16,2,1)
+        self.write(self.box+160+511*18+17,1,1)
+        self.write(self.box+116,10)
+        self.call('ScriptContext_Init')
+        self.call('LockPlayerFieldControls')
+        self.call('SoulLink_Overworld')
+        self.assertEqual(self.read(self.party+86,2),0)
+        self.call('UnlockPlayerFieldControls')
+        self.call('SoulLink_Overworld')
+        self.assertEqual(self.read(self.save+20+511,1),2)
+        self.assertGreater(self.read(self.party+86,2),0)
+        self.assertEqual(self.call('GetMonData3',self.party,self.fields['MON_DATA_HP'],0),
+                         self.call('GetMonData3',self.party,self.fields['MON_DATA_MAX_HP'],0))
+
+    def test_link_snapshot_preserves_damage_and_never_revives_deaths(self):
+        self.mon()
+        self.call('ScriptContext_Init')
+        self.call('UnlockPlayerFieldControls')
+        # Local state, remote state, stored HP, ended run, expected HP.
+        for version,(local,remote,hp,ended,expected) in enumerate(
+                [(1,2,3,0,3),(2,2,0,0,0),(3,2,0,0,0),(1,3,0,0,0),(1,2,0,1,0)],10):
+            with self.subTest(local=local,remote=remote,hp=hp,ended=ended):
+                self.write(self.save+20+511,local,1)
+                self.write(self.party+86,hp,2)
+                self.write(self.box+160+511*18+16,remote,1)
+                self.write(self.box+160+511*18+17,1,1)
+                self.write(self.box+116,version)
+                self.write(self.save+584,0,1)
+                self.write(self.box+48,ended)
+                self.call('SoulLink_Overworld')
+                self.assertEqual(self.read(self.party+86,2),expected)
+
     def linked_party_mon(self, slot, soul_id, species=1):
         address = self.party + slot * 100
         self.call('CreateMon',address,species,5,32,0,0,0,0)

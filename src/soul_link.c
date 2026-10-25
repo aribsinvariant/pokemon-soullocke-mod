@@ -528,7 +528,7 @@ static void ReconcileParty(void)
 
 bool8 SoulLink_Overworld(void)
 {
-    u16 i, id;
+    u16 i, j, id;
     bool8 alive = FALSE, any = FALSE;
     if (!SoulLink_Enabled())
         return FALSE;
@@ -548,7 +548,18 @@ bool8 SoulLink_Overworld(void)
             }
             // Never revive a locally recorded death or forget a queued catch.
             if (SAVE->state[i] < SOUL_DEAD && BOX->mons[i].state >= SOUL_LINKED)
+            {
+                if (SAVE->state[i] == SOUL_PENDING && BOX->mons[i].state == SOUL_LINKED
+                    && !SAVE->ended && !BOX->ended)
+                {
+                    // Pending HP is masked to zero and may have been written back by game routines.
+                    // Boxed mons regain HP on withdrawal; restore only zero-HP party mons here.
+                    for (j = 0; j < PARTY_SIZE; j++)
+                        if (GetMonData(&gPlayerParty[j], MON_DATA_SOUL_ID) == i+1 && gPlayerParty[j].hp == 0)
+                            gPlayerParty[j].hp = gPlayerParty[j].maxHP;
+                }
                 SAVE->state[i] = BOX->mons[i].state;
+            }
         }
         SAVE->ended |= BOX->ended;
         BOX->appliedVersion = BOX->rxVersion;
