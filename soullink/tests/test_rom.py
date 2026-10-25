@@ -90,6 +90,57 @@ class RomTests(unittest.TestCase):
         self.call('BoxMonToMon',self.party,self.party+100)
         self.assertEqual(self.call('GetMonData3',self.party+100,self.fields['MON_DATA_SOUL_ID'],0),512)
 
+    def linked_party_mon(self, slot, soul_id, species=1):
+        address = self.party + slot * 100
+        self.call('CreateMon',address,species,5,32,0,0,0,0)
+        scratch = 0x0203ffe0
+        self.write(scratch,soul_id,2)
+        self.call('SetMonData',address,self.fields['MON_DATA_SOUL_ID'],scratch)
+        self.write(self.save+20+soul_id-1,2,1)
+        self.write(self.box+160+(soul_id-1)*18+17,1,1)
+        self.write(self.symbols['gPlayerPartyCount'],slot+1,1)
+
+    def party_ids(self):
+        return [self.call('GetMonData3',self.party+i*100,self.fields['MON_DATA_SOUL_ID'],0)
+                for i in range(self.read(self.symbols['gPlayerPartyCount'],1))]
+
+    def test_catch_preserves_lead_and_existing_party_order(self):
+        for rule in (32,16):  # Paired party and team type rules both reconcile membership.
+            with self.subTest(rule=rule):
+                self.call('ZeroPlayerPartyMons')
+                for soul_id in (20,5):
+                    self.write(self.box+160+(soul_id-1)*18+17,0,1)
+                self.write(self.save+12,rule)
+                self.linked_party_mon(0,512)
+                self.call('ScriptContext_Init')
+                self.call('UnlockPlayerFieldControls')
+                self.call('SoulLink_Overworld')
+                self.linked_party_mon(1,20)
+                self.call('SoulLink_Overworld')
+                self.assertEqual(self.party_ids(),[512,20])
+                # A player-selected lead and the rest of the order survive the next catch.
+                self.linked_party_mon(0,20)
+                self.linked_party_mon(1,512)
+                self.linked_party_mon(2,5)
+                self.call('SoulLink_Overworld')
+                self.assertEqual(self.party_ids(),[20,512,5])
+
+    def test_party_change_keeps_survivor_order_and_appends_withdrawals(self):
+        self.write(self.save+12,32)
+        for slot,soul_id in enumerate((20,512,5)):
+            self.linked_party_mon(slot,soul_id)
+        self.call('ScriptContext_Init')
+        self.call('UnlockPlayerFieldControls')
+        self.call('SoulLink_Overworld')
+        # Move pair 5 to the PC and request it back alongside the surviving starter.
+        self.call('SetBoxMonAt',0,0,self.party+200)
+        self.call('ZeroMonData',self.party+200)
+        self.write(self.symbols['gPlayerPartyCount'],2,1)
+        self.write(self.box+160+(20-1)*18+17,0,1)
+        self.call('SoulLink_Overworld')
+        self.assertEqual(self.party_ids(),[512,5])
+        self.assertEqual(self.call('GetBoxMonDataAt',0,0,self.fields['MON_DATA_SOUL_ID']),20)
+
     def test_remote_death_waits_for_safe_overworld(self):
         self.mon()
         self.write(self.save+20+511,2,1)

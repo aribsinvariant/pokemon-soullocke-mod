@@ -471,7 +471,7 @@ static bool8 PartyMatches(void)
 static void ReconcileParty(void)
 {
     struct Pokemon party[PARTY_SIZE];
-    u16 ids[PARTY_SIZE], count = 0, i, j, box, slot, id, found, freeSlots = 0, withdraw = 0, deposit = 0;
+    u16 ids[PARTY_SIZE], count = 0, kept = 0, i, j, box, slot, id, found, freeSlots = 0, withdraw = 0, deposit = 0;
     u32 hash = 2166136261u;
     if (!(SAVE->rules & (SOUL_PAIRED_PARTY | SOUL_TEAM_TYPE)) || SAVE->state[SOUL_STARTER] < SOUL_LINKED) return;
     for (i = 0; i < SOUL_AREAS; i++)
@@ -483,17 +483,24 @@ static void ReconcileParty(void)
         }
     if (hash == SAVE->partyHash || count == 0) return;
     memset(party, 0, sizeof(party));
+    // Agreement controls membership, while each player controls their battle order.
+    for (i = 0; i < PARTY_SIZE; i++)
+    {
+        id = GetMonData(&gPlayerParty[i], MON_DATA_SOUL_ID);
+        if (GetMonData(&gPlayerParty[i], MON_DATA_SPECIES) && Approved(id))
+            party[kept++] = gPlayerParty[i];
+    }
     for (i = 0; i < count; i++)
     {
         found = FALSE;
         for (j = 0; j < PARTY_SIZE; j++)
             if (GetMonData(&gPlayerParty[j], MON_DATA_SOUL_ID) == ids[i])
-            { party[i] = gPlayerParty[j]; found = TRUE; break; }
+            { found = TRUE; break; }
         if (found) continue;
         for (box = 0; box < TOTAL_BOXES_COUNT && !found; box++)
             for (slot = 0; slot < IN_BOX_COUNT; slot++)
                 if (GetBoxMonDataAt(box, slot, MON_DATA_SOUL_ID) == ids[i])
-                { BoxMonAtToMon(box, slot, &party[i]); found = TRUE; withdraw++; break; }
+                { BoxMonAtToMon(box, slot, &party[kept++]); found = TRUE; withdraw++; break; }
         if (!found) return;
     }
     for (box = 0; box < TOTAL_BOXES_COUNT; box++)
