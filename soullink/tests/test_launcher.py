@@ -206,6 +206,13 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(self.profile['token'], diagnostic)
         self.assertNotIn(self.profile['partner_token'], diagnostic)
 
+    async def test_start_options_reach_guest(self):
+        from soullink.relay.model import DEFAULT_START_OPTIONS, Rules
+        rules = DEFAULT_RULES | DEFAULT_START_OPTIONS | Rules.NO_BATTLE_ITEMS | Rules.FORCE_SET | (19 << 18)
+        await self.join()
+        await self.host.configure(999, rules)
+        self.assertEqual((await self.guest.info())['rules'], rules)
+
     async def test_host_settings_and_in_game_lock_share_state(self):
         await self.join()
         await self.host.configure(999, 1)

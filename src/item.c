@@ -1,5 +1,6 @@
 #include "global.h"
 #include "item.h"
+#include "soul_link.h"
 #include "berry.h"
 #include "string_util.h"
 #include "text.h"
@@ -929,11 +930,15 @@ ItemUseFunc GetItemFieldFunc(u16 itemId)
 
 u8 GetItemBattleUsage(u16 itemId)
 {
+    if (SoulLink_RuleEnabled(SOUL_NO_BATTLE_ITEMS) && GetItemPocket(itemId) != POCKET_POKE_BALLS)
+        return ITEM_B_USE_NONE;
     return gItems[SanitizeItemId(itemId)].battleUsage;
 }
 
 ItemUseFunc GetItemBattleFunc(u16 itemId)
 {
+    if (SoulLink_RuleEnabled(SOUL_NO_BATTLE_ITEMS) && GetItemPocket(itemId) != POCKET_POKE_BALLS)
+        return NULL;
     return gItems[SanitizeItemId(itemId)].battleUseFunc;
 }
 

@@ -1,5 +1,6 @@
 #include "global.h"
 #include "battle.h"
+#include "soul_link.h"
 #include "battle_anim.h"
 #include "battle_ai_script_commands.h"
 #include "battle_arena.h"
@@ -3090,7 +3091,8 @@ static void BattleStartClearSetData(void)
         gHitMarker |= HITMARKER_NO_ANIMATIONS;
     }
 
-    gBattleScripting.battleStyle = gSaveBlock2Ptr->optionsBattleStyle;
+    gBattleScripting.battleStyle = SoulLink_RuleEnabled(SOUL_FORCE_SET)
+        ? OPTIONS_BATTLE_STYLE_SET : gSaveBlock2Ptr->optionsBattleStyle;
 
     gMultiHitCounter = 0;
     gBattleOutcome = 0;

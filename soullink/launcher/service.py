@@ -12,7 +12,7 @@ import socket
 import subprocess
 import time
 from soullink.bridge.client import run as connect
-from soullink.relay.model import Store, PROTOCOL, BUILD, integer
+from soullink.relay.model import Store, PROTOCOL, BUILD, integer, validate_rules
 from soullink.relay.server import start_relay
 from soullink.tools.player_script import generate_script
 from .storage import GamePackage, Invite, Profiles, validate_host
@@ -36,7 +36,7 @@ async def session_info(host, port, room, player, token):
             raise ValueError('The relay uses an incompatible game protocol.')
         integer(data['run'], 1)
         integer(data['seed'])
-        integer(data['rules'], 0, 4095)
+        validate_rules(data['rules'])
         return data
     except (OSError, asyncio.TimeoutError) as exc:
         raise ValueError('Cannot reach the relay. Check the address, port, firewall, and router forwarding.') from exc
@@ -115,7 +115,7 @@ class Controller:
         name = name.strip()
         if not 1 <= len(name) <= 64:
             raise ValueError('Enter a session name (1–64 characters).')
-        port, seed, rules = integer(port, 1, 65535), integer(seed), integer(rules, 0, 4095)
+        port, seed, rules = integer(port, 1, 65535), integer(seed), validate_rules(rules)
         package = await self.package()
         identifier = secrets.token_hex(16)
         directory = self.profiles.root / 'sessions' / identifier

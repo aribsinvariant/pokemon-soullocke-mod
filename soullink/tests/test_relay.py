@@ -31,6 +31,26 @@ class StateTests(unittest.TestCase):
     def catch(self, player, area=1, species=1, type=1, gender=0):
         return self.event(player, 'catch', area, species, type, gender, NAME, 1)
 
+    def test_nuzlocke_options_confirm_lock_and_restart(self):
+        from soullink.relay.model import START_OPTIONS
+        rules = int(DEFAULT_RULES | Rules.NO_BATTLE_ITEMS | Rules.FORCE_SET) | START_OPTIONS | (2 << 14) | (19 << 18)
+        self.store.create('options', rules=rules)
+        self.store.configure('options', 42, rules)
+        self.store.event('options', 0, 1, 'confirm', [rules, 42])
+        state = self.store.event('options', 1, 1, 'confirm', [rules, 42])
+        self.assertTrue(state['locked'])
+        self.assertEqual(state['rules'], rules)
+        with self.assertRaises(ProtocolError):
+            self.store.configure('options', 42, 97)
+        self.store.event('options', 0, 2, 'wipe', [])
+        self.assertEqual(self.store.restart('options')['rules'], rules)
+
+    def test_invalid_start_options_rejected(self):
+        from soullink.relay.model import START_OPTIONS
+        for rules in (1 << 24, START_OPTIONS | (3 << 14), START_OPTIONS | (20 << 18), 1 << 16):
+            with self.subTest(rules=rules), self.assertRaises(ProtocolError):
+                self.store.create('invalid', rules=rules)
+
     def test_duplicate_room_preserves_existing_run(self):
         self.catch(0)
         before = self.store.get('test')

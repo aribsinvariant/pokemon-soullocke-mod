@@ -13,6 +13,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 import webbrowser
 from .service import Controller
 from .storage import DEFAULT_RULES, RULES
+from soullink.relay.model import START_OPTIONS, DEFAULT_START_OPTIONS
 
 
 class Worker:
@@ -165,8 +166,10 @@ class Launcher:
                         variable=self.internet).pack(anchor='w', pady=(8, 4))
         ttk.Label(self.host_tab, text='Your public address is detected when hosting starts; port forwarding is checked separately.',
                   wraplength=790).pack(anchor='w', pady=(0, 4))
-        self.rule_frame = ttk.LabelFrame(self.host_tab, text='Challenge rules', padding=8)
-        self.rule_frame.pack(fill='x', pady=6)
+        configuration = ttk.Notebook(self.host_tab)
+        configuration.pack(fill='x', pady=6)
+        self.rule_frame = ttk.Frame(configuration, padding=8)
+        configuration.add(self.rule_frame, text='Challenge and Nuzlocke rules')
         self.rules = []
         self.rule_widgets = []
         for i, label in enumerate(RULES):
@@ -176,6 +179,21 @@ class Launcher:
             checkbox = ttk.Checkbutton(self.rule_frame, text=label, variable=var)
             checkbox.grid(row=i // 2, column=i % 2, sticky='w', padx=(0, 18), pady=2)
             self.rule_widgets.append(checkbox)
+        options = ttk.Frame(configuration, padding=8)
+        configuration.add(options, text='Starting game settings')
+        self.start_options = []
+        for i, (label, choices, default) in enumerate((
+                ('Text speed', ('Slow', 'Medium', 'Fast'), 'Fast'),
+                ('Battle style', ('Shift', 'Set'), 'Set'),
+                ('Animations', ('On', 'Off'), 'Off'),
+                ('Text box', tuple(str(n) for n in range(1, 21)), '1'))):
+            var = tk.StringVar(value=default)
+            var.trace_add('write', self.mark_dirty)
+            self.start_options.append((var, choices))
+            ttk.Label(options, text=label).grid(row=i // 2, column=(i % 2) * 2, padx=8, pady=3)
+            widget = ttk.Combobox(options, textvariable=var, values=choices, state='readonly', width=10)
+            widget.grid(row=i // 2, column=(i % 2) * 2 + 1, padx=8, pady=3)
+            self.rule_widgets.append(widget)
         self.seed.trace_add('write', self.mark_dirty)
         ttk.Label(self.host_tab, text='Both players confirm these rules in-game with SELECT. Settings then lock.',
                   wraplength=790).pack(anchor='w', pady=4)
@@ -251,7 +269,10 @@ class Launcher:
         self.seed.set(str(secrets.randbits(32)))
 
     def rule_mask(self):
-        return sum((1 << i) for i, var in enumerate(self.rules) if var.get())
+        mask = sum((1 << i) for i, var in enumerate(self.rules) if var.get()) | START_OPTIONS
+        for (var, choices), shift in zip(self.start_options, (14, 16, 17, 18)):
+            mask |= choices.index(var.get()) << shift
+        return mask
 
     def browse_package(self):
         path = filedialog.askdirectory(title='Select the built dist folder')
@@ -385,6 +406,9 @@ class Launcher:
             self.seed.set(str(info['seed']))
             for i, var in enumerate(self.rules):
                 var.set(bool(info['rules'] & (1 << i)))
+            options = info['rules'] if info['rules'] & START_OPTIONS else DEFAULT_START_OPTIONS
+            for (var, choices), shift, mask in zip(self.start_options, (14, 16, 17, 18), (3, 1, 1, 31)):
+                var.set(choices[(options >> shift) & mask])
             self.settings_dirty = False
         editable = self.profile and self.profile['role'] == 'host' and not info['locked']
         for widget in self.rule_widgets:
@@ -397,7 +421,7 @@ class Launcher:
         can_edit = (not self.profile or (self.profile['role'] == 'host' and self.info and not self.info['locked']))
         rule_state = 'normal' if can_edit and not self.busy and not self.closing else 'disabled'
         for widget in self.rule_widgets + [self.seed_entry, self.random_button]:
-            widget.configure(state=rule_state)
+            widget.configure(state='readonly' if rule_state == 'normal' and isinstance(widget, ttk.Combobox) else rule_state)
         if self.busy or self.closing:
             return
         active = self.profile is not None

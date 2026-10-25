@@ -23,9 +23,16 @@ class Rules(IntFlag):
     RANDOM_STARTERS = 512
     SIMILAR = 1024
     NO_LEGENDS = 2048
+    NO_BATTLE_ITEMS = 4096
+    FORCE_SET = 8192
 
 
 DEFAULT_RULES = int(Rules.DUPES | Rules.PAIRED_PARTY | Rules.WIPE)
+
+
+# Starting options share the existing 32-bit configuration word.
+START_OPTIONS = 1 << 23
+DEFAULT_START_OPTIONS = START_OPTIONS | (2 << 14) | (1 << 16) | (1 << 17)
 
 
 class ProtocolError(ValueError):
@@ -40,6 +47,15 @@ def integer(value, low=0, high=0xFFFFFFFF):
     if not low <= number <= high:
         raise ProtocolError('integer outside range')
     return number
+
+
+def validate_rules(value):
+    value = integer(value, 0, 0xFFFFFF)
+    if ((value >> 14) & 3) > 2 or ((value >> 18) & 31) > 19:
+        raise ProtocolError("invalid starting game options")
+    if not value & START_OPTIONS and value >> 14:
+        raise ProtocolError("starting options require the presence flag")
+    return value
 
 
 def name_bytes(value, length):
@@ -68,7 +84,7 @@ class Store:
         if not room.isalnum() or not 1 <= len(room) <= 32:
             raise ProtocolError('room must be 1-32 letters or digits')
         state = dict(run=secrets.randbelow(0x7FFFFFFE) + 1, seed=integer(seed),
-                     rules=integer(rules, 0, 4095), version=0, locked=False, ended=False,
+                     rules=validate_rules(rules), version=0, locked=False, ended=False,
                      tokens=[secrets.token_hex(16), secrets.token_hex(16)],
                      confirmed=[False, False], notice=[0, 0], seq=[0, 0], trainers=['ff'*8]*2,
                      mons=[{}, {}], reservations=[{}, {}], failures=[], party=[[], []], proposed=[None, None])
@@ -93,7 +109,7 @@ class Store:
             state = self.get(room)
             if state['locked']:
                 raise ProtocolError('settings are locked for this run')
-            state['seed'], state['rules'] = integer(seed), integer(rules, 0, 4095)
+            state['seed'], state['rules'] = integer(seed), validate_rules(rules)
             state['confirmed'] = [False, False]
             state['version'] += 1
             self.save(room, state)
@@ -161,7 +177,7 @@ class Store:
         if kind == 'settings':
             if s['locked'] or p != 0 or len(args) != 2:
                 raise ProtocolError('settings locked or not host')
-            s['rules'], s['seed'] = integer(args[0], 0, 4095), integer(args[1])
+            s['rules'], s['seed'] = validate_rules(args[0]), integer(args[1])
             s['confirmed'] = [False, False]
             return
         if kind == 'confirm':

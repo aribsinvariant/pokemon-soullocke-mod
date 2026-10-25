@@ -89,6 +89,14 @@ For two emulator instances on one PC, generate the second script with `--local-p
 - Trading, daycare services, and Battle Frontier challenges are disabled.
 - Disconnection allows a current battle/script to finish, then pauses movement. SELECT and saving through the Start menu remain available. Reconnection replays authoritative outcomes. Ordinary save reloads preserve recorded deaths. A save that predates an already committed catch requires a newer save, because the missing Pokémon cannot be reconstructed. Emulator save-state rollback stops synchronization and requires resetting to an in-game save.
 
+## Nuzlocke and starting settings
+
+The host can select **No bag items in battle** and **Force Set battle style** alongside the existing challenge rules. Both default to off. The item rule blocks player bag items in wild and trainer battles except Poké Balls; held items, trainer AI items, and out-of-battle item use are unaffected. Force Set suppresses the free switch prompt even if the player changes the normal Options menu to Shift.
+
+The launcher's Host tab has a **Starting game settings** tab for text speed, battle style, animations, and all 20 text box types. Defaults are Fast, Set, animations Off, and text box 1. These preferences apply to both players when the room configuration first reaches the game, and update when the host edits configuration before confirmation. The ROM also starts new games with Fast / Set / Off before connecting. After confirmation, players can change their normal Options preferences; continuing a save does not reset them. Force Set remains enforced independently.
+
+These settings are also editable in the SELECT menu before confirmation: scroll past the challenge rules to reach the four starting options, seed, and confirmation. Restarting a finished room retains the selected configuration. Both players must use the rebuilt ROM and matching updated runtime/scripts.
+
 ## Randomization
 
 Wild encounters and starters have separate toggles. Both players use the same seed with player-specific results. Levels, encounter rates, trainers, gifts, and static species remain unchanged. Similar-strength mode selects from the nearest 50-point base-stat-total band. Legendary exclusion also excludes mythical Pokémon. Settings are fixed after both players confirm.

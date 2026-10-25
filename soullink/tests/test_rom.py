@@ -56,6 +56,42 @@ class RomTests(unittest.TestCase):
         self.call('SoulLink_Receive',self.party)
         return self.call('GetMonData3',self.party,self.fields['MON_DATA_SOUL_ID'],0)
 
+    def test_battle_item_rule_keeps_balls_and_field_items(self):
+        potion, ball, x_attack = 13, 4, 75
+        self.write(self.box + 32, 1 << 12)
+        self.call('SoulLink_Frame')
+        for item in (potion, x_attack):
+            self.assertEqual(self.call('GetItemBattleUsage', item), 0)
+            self.assertEqual(self.call('GetItemBattleFunc', item), 0)
+        self.assertNotEqual(self.call('GetItemBattleUsage', ball), 0)
+        self.assertNotEqual(self.call('GetItemBattleFunc', ball), 0)
+        self.assertNotEqual(self.call('GetItemFieldFunc', potion), 0)
+        self.write(self.box + 32, 0)
+        self.call('SoulLink_Frame')
+        self.assertNotEqual(self.call('GetItemBattleFunc', potion), 0)
+
+    def test_force_set_overrides_options_only_when_enabled(self):
+        self.call('AllocateBattleResources')
+        options = self.read(self.symbols['gSaveBlock2Ptr']) + 0x14
+        self.write(options, 0, 2)  # Player selected Shift.
+        for rules, expected in ((1 << 13, 1), (0, 0)):
+            self.write(self.box + 32, rules)
+            self.call('SoulLink_Frame')
+            self.call('BattleStartClearSetData')
+            self.assertEqual(self.read(self.symbols['gBattleScripting'] + 0x1d, 1), expected)
+        self.call('FreeBattleResources')
+
+    def test_start_options_and_continue_preserves_preferences(self):
+        options = self.read(self.symbols['gSaveBlock2Ptr']) + 0x14
+        self.assertEqual(self.read(options, 2) & 0x6ff, 2 | (1 << 9) | (1 << 10))
+        self.write(self.save + 4, 0)  # First room configuration, even if already locked.
+        self.write(self.box + 32, (1 << 23) | (1 << 14) | (19 << 18))
+        self.call('SoulLink_Frame')
+        self.assertEqual(self.read(options, 2) & 0x6ff, 1 | (19 << 3))
+        self.write(options, 2 | (3 << 3), 2)
+        self.call('SoulLink_Frame')
+        self.assertEqual(self.read(options, 2), 2 | (3 << 3))
+
     def test_mailbox_and_save_layout(self):
         self.assertEqual(self.read(self.box),0x534F554C)
         self.assertEqual(self.read(self.box+8),0x534C0001)

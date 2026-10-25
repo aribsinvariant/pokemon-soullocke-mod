@@ -60,11 +60,27 @@ bool8 SoulLink_Enabled(void)
     return gPokemonStoragePtr != NULL && SAVE->magic == SOUL_MAGIC;
 }
 
+bool8 SoulLink_RuleEnabled(u32 rule)
+{
+    return SoulLink_Enabled() && (SAVE->rules & rule) != 0;
+}
+
+void SoulLink_ApplyOptions(u32 rules)
+{
+    if (!(rules & SOUL_START_OPTIONS))
+        return;
+    gSaveBlock2Ptr->optionsTextSpeed = min((rules >> 14) & 3, 2);
+    gSaveBlock2Ptr->optionsBattleStyle = (rules >> 16) & 1;
+    gSaveBlock2Ptr->optionsBattleSceneOff = (rules >> 17) & 1;
+    gSaveBlock2Ptr->optionsWindowFrameType = min((rules >> 18) & 31, 19);
+}
+
 void SoulLink_NewGame(void)
 {
     memset(SAVE, 0, sizeof(*SAVE));
     SAVE->magic = SOUL_MAGIC;
     SAVE->rules = SOUL_DUPES | SOUL_PAIRED_PARTY | SOUL_WIPE;
+    SoulLink_ApplyOptions(SOUL_DEFAULT_OPTIONS);
     SAVE->seed = 1;
     memset((void *)BOX, 0, sizeof(*BOX));
     sEncounter = 0xFFFF;
@@ -167,6 +183,8 @@ void SoulLink_Frame(void)
     memcpy((void *)BOX->trainer, gSaveBlock2Ptr->playerName, 8);
     if (BOX->run && BOX->connection != 3)
     {
+        if (!SAVE->run || (!SAVE->locked && SAVE->rules != BOX->rules))
+            SoulLink_ApplyOptions(BOX->rules);
         SAVE->run = BOX->run;
         SAVE->seed = BOX->seed;
         SAVE->rules = BOX->rules;

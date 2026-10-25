@@ -20,7 +20,7 @@ Both players must use the same built game package. The launcher checks its check
 
 ## Host
 
-1. Open **Host**, enter a session name, and choose a seed and challenge rules. The default TCP port is **8768**.
+1. Open **Host**, enter a session name, and choose a seed and challenge/Nuzlocke rules. Use **Starting game settings** to choose text speed, battle style, animations, and text box type for both players. The default TCP port is **8768**.
 2. For players on the same home network, leave Internet hosting off. For remote players, enable **Internet hosting** to try UPnP automatic router forwarding.
 3. Click **Create and host**. Allow the app through Windows Firewall on your home network if Windows prompts.
 4. Review **Invite address** and **Port**. For LAN play, use the host PC's LAN address. For Internet play, use the router's public IPv4 address. Edit these fields when using custom forwarding or a VPN.

@@ -37,7 +37,18 @@ static const u8 sRule8[] = _("Random wild encounters");
 static const u8 sRule9[] = _("Random starters");
 static const u8 sRule10[] = _("Similar strength");
 static const u8 sRule11[] = _("Exclude legendaries");
-static const u8 *const sRules[] = {sRule0,sRule1,sRule2,sRule3,sRule4,sRule5,sRule6,sRule7,sRule8,sRule9,sRule10,sRule11};
+static const u8 sRule12[] = _("No battle bag items");
+static const u8 sRule13[] = _("Force Set battle style");
+static const u8 sTextSpeed[] = _("Text: ");
+static const u8 sStyle[] = _("Style: ");
+static const u8 sAnimations[] = _("Animations off: ");
+static const u8 sFrame[] = _("Text box: ");
+static const u8 sSlow[] = _("Slow");
+static const u8 sMedium[] = _("Medium");
+static const u8 sFast[] = _("Fast");
+static const u8 sShift[] = _("Shift");
+static const u8 sSet[] = _("Set");
+static const u8 *const sRules[] = {sRule0,sRule1,sRule2,sRule3,sRule4,sRule5,sRule6,sRule7,sRule8,sRule9,sRule10,sRule11,sRule12,sRule13};
 
 static const u8 sSoulText0[] = _("Sync error: see emulator console");
 static const u8 sSoulText1[] = _("Both players connected");
@@ -107,15 +118,39 @@ static void Draw(u8 taskId)
         for (line = 0; line < 4; line++)
         {
             i = (selection / 4) * 4 + line;
-            if (i >= 14)
+            if (i >= 20)
                 break;
             end = StringCopy(buffer, i == selection ? sSoulText4 : sSoulText5);
-            if (i < 12)
+            if (i < 14)
             {
                 end = StringCopy(end, sRules[i]);
                 StringCopy(end, box->rules & (1 << i) ? sSoulText6 : sSoulText7);
             }
-            else if (i == 12)
+            else if (i < 18)
+            {
+                u32 options = box->rules & SOUL_START_OPTIONS ? box->rules : SOUL_DEFAULT_OPTIONS;
+                if (i == 14)
+                {
+                    end = StringCopy(end, sTextSpeed);
+                    StringCopy(end, ((options >> 14) & 3) == 0 ? sSlow : ((options >> 14) & 3) == 1 ? sMedium : sFast);
+                }
+                else if (i == 15)
+                {
+                    end = StringCopy(end, sStyle);
+                    StringCopy(end, options & (1 << 16) ? sSet : sShift);
+                }
+                else if (i == 16)
+                {
+                    end = StringCopy(end, sAnimations);
+                    StringCopy(end, options & (1 << 17) ? sSoulText6 : sSoulText7);
+                }
+                else
+                {
+                    end = StringCopy(end, sFrame);
+                    ConvertIntToDecimalStringN(end, ((options >> 18) & 31) + 1, STR_CONV_MODE_LEFT_ALIGN, 2);
+                }
+            }
+            else if (i == 18)
             {
                 end = StringCopy(end, sSoulText8);
                 ConvertIntToDecimalStringN(end, box->seed, STR_CONV_MODE_LEFT_ALIGN, 10);
@@ -187,16 +222,26 @@ static void MenuTask(u8 taskId)
     }
     if (!box->locked)
     {
-        if (JOY_NEW(DPAD_UP)) task->data[2] = (sel + 13) % 14;
-        if (JOY_NEW(DPAD_DOWN)) task->data[2] = (sel + 1) % 14;
+        if (JOY_NEW(DPAD_UP)) task->data[2] = (sel + 19) % 20;
+        if (JOY_NEW(DPAD_DOWN)) task->data[2] = (sel + 1) % 20;
         if (box->player == 0 && box->connection == 2 && JOY_NEW(DPAD_LEFT | DPAD_RIGHT))
         {
-            if (sel < 12)
+            if (sel < 14)
                 SoulLink_SendSettings(box->rules ^ (1 << sel), box->seed, FALSE);
-            else if (sel == 12)
+            else if (sel < 18)
+            {
+                u32 rules = box->rules & SOUL_START_OPTIONS ? box->rules : box->rules | SOUL_DEFAULT_OPTIONS;
+                u8 shift = sel == 14 ? 14 : sel == 15 ? 16 : sel == 16 ? 17 : 18;
+                u8 mask = sel == 14 ? 3 : sel == 17 ? 31 : 1;
+                u8 count = sel == 14 ? 3 : sel == 17 ? 20 : 2;
+                u8 value = (((rules >> shift) & mask) + (JOY_NEW(DPAD_RIGHT) ? 1 : count - 1)) % count;
+                rules = (rules & ~((u32)mask << shift)) | ((u32)value << shift);
+                SoulLink_SendSettings(rules, box->seed, FALSE);
+            }
+            else if (sel == 18)
                 SoulLink_SendSettings(box->rules, box->seed + (JOY_NEW(DPAD_RIGHT) ? 1 : -1), FALSE);
         }
-        if (sel == 13 && JOY_NEW(A_BUTTON) && box->connection == 2)
+        if (sel == 19 && JOY_NEW(A_BUTTON) && box->connection == 2)
             SoulLink_SendSettings(box->rules, box->seed, TRUE);
     }
     else

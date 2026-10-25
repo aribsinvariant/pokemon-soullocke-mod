@@ -43,6 +43,8 @@ The Windows workflow builds and smoke-tests a frozen executable, uploads its ZIP
 - The asyncio relay stores room state and ordered event identities transactionally in SQLite with full synchronization. Events are acknowledged only after commit. Position updates are transient and expire independently.
 - Both players run separate game simulation clocks. No battles, NPCs, collision, or story flags are synchronized.
 
+Configuration retains the existing 32-bit rules field and save/mailbox sizes. Bits 0–11 keep their original meanings; bits 12 and 13 disable battle bag items and force Set. Starting options use bits 14–15 (text speed 0–2), 16 (Set), 17 (animations off), and 18–22 (zero-based frame 0–19), with bit 23 indicating their presence. Legacy configuration without bit 23 does not overwrite game options. Higher bits and invalid option values are rejected. No save migration is required.
+
 ABI v1: 160-byte header, 512 packed 18-byte remote Pokémon records, then 16 48-byte outbound events at offset 9376. Line protocol: `HELLO`, `EVENT`, `POLL`, `POS`, `STATE`, `NOTICE`, `ERROR`. Credentials and protocol/build identity are checked before processing gameplay messages. The bridge writes complete snapshots before publishing their version.
 
 ## Tests

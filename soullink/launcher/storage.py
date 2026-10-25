@@ -15,6 +15,7 @@ RULES = (
     'Different pair types', 'Unique team types', 'Paired parties', 'Wipe ends both runs',
     'Separate gift encounters', 'Randomize wild Pokémon', 'Randomize starters',
     'Similar-strength randomization', 'Exclude legendaries and mythicals',
+    'No bag items in battle (except Poké Balls)', 'Force Set battle style',
 )
 
 

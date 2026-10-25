@@ -18,6 +18,10 @@
 #define SOUL_RANDOM_STARTERS (1 << 9)
 #define SOUL_SIMILAR (1 << 10)
 #define SOUL_NO_LEGENDS (1 << 11)
+#define SOUL_NO_BATTLE_ITEMS (1 << 12)
+#define SOUL_FORCE_SET (1 << 13)
+#define SOUL_START_OPTIONS (1 << 23)
+#define SOUL_DEFAULT_OPTIONS (SOUL_START_OPTIONS | (2 << 14) | (1 << 16) | (1 << 17))
 #define SOUL_AVAILABLE 0
 #define SOUL_PENDING 1
 #define SOUL_LINKED 2
@@ -78,6 +82,8 @@ bool8 SoulLink_Memo(struct Pokemon *mon, u8 *text);
 void SoulLink_NewGame(void);
 void SoulLink_Starter(void);
 bool8 SoulLink_Enabled(void);
+bool8 SoulLink_RuleEnabled(u32 rule);
+void SoulLink_ApplyOptions(u32 rules);
 bool8 SoulLink_AllowedMode(void);
 u8 SoulLink_FindFieldMove(u16 move);
 struct Pokemon *SoulLink_FieldMon(u16 index);
