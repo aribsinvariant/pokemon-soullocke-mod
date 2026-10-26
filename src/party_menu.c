@@ -472,7 +472,7 @@ static void CursorCb_QolRename(u8);
 static const u8 sQolLevelText[] = _("Set Level");
 static const u8 sQolMovesText[] = _("Learn Moves");
 static const u8 sQolRenameText[] = _("Rename");
-static const u8 sQolLevelPrompt[] = _("Level: {STR_VAR_1}  A: set  B: cancel\nUP/DOWN: 1  LEFT/RIGHT: 10");
+static const u8 sQolLevelPrompt[] = _("Level: {STR_VAR_1}  A: set  B: cancel\nUP/DOWN: 1  LEFT/RIGHT: 5");
 static EWRAM_DATA u8 sQolNickname[POKEMON_NAME_BUFFER_SIZE] = {0};
 static EWRAM_DATA u16 sQolPreviousSpecies = 0;
 static void CursorCb_Summary(u8);
@@ -6554,8 +6554,8 @@ static void Task_QolLevel(u8 taskId)
     }
     if (JOY_REPEAT(DPAD_UP)) (*level)++;
     if (JOY_REPEAT(DPAD_DOWN)) (*level)--;
-    if (JOY_REPEAT(DPAD_RIGHT)) *level += 10;
-    if (JOY_REPEAT(DPAD_LEFT)) *level -= 10;
+    if (JOY_REPEAT(DPAD_RIGHT)) *level += 5;
+    if (JOY_REPEAT(DPAD_LEFT)) *level -= 5;
     if (*level < 1) *level = 1;
     if (*level > MAX_LEVEL) *level = MAX_LEVEL;
     if (JOY_REPEAT(DPAD_ANY)) QolDrawLevel(taskId);
