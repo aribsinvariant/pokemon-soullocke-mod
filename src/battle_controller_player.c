@@ -3191,17 +3191,31 @@ static void QolDrawMatchup(u16 move)
     u8 text[40], *end;
     u8 left = GetBattlerAtPosition(B_POSITION_OPPONENT_LEFT);
     u8 right = GetBattlerAtPosition(B_POSITION_OPPONENT_RIGHT);
-    // Replace the type label with a compact type + matchup line pair.
+    const u8 *typeName = gTypeNames[gBattleMoves[move].type];
+    u32 typeX = 64 - GetStringWidth(FONT_SMALL_NARROW, typeName, 0);
+
+    // Latin small-narrow glyphs are 12 pixels tall: both labels must share
+    // a baseline in this 16-pixel-high window.
     FillWindowPixelBuffer(B_WIN_MOVE_TYPE, PIXEL_FILL(14));
-    end = StringCopy(text, gTypeNames[gBattleMoves[move].type]);
-    AddTextPrinterParameterized4(B_WIN_MOVE_TYPE, FONT_SMALL_NARROW, 0, 0, 0, 0, sQolInfoColors, TEXT_SKIP_DRAW, text);
     end = StringCopy(text, QolMultiplierText(move, left));
     if (IsDoubleBattle())
     {
         end = StringCopy(end, sQolSlash);
         StringCopy(end, QolMultiplierText(move, right));
     }
-    AddTextPrinterParameterized4(B_WIN_MOVE_TYPE, FONT_SMALL_NARROW, 0, 8, 0, 0, sQolInfoColors, TEXT_SKIP_DRAW, text);
+    if (IsDoubleBattle())
+    {
+        // Both matchups need the full bottom row. The abbreviated type names
+        // fit in the 32-pixel PP-label window beside the unchanged PP count.
+        FillWindowPixelBuffer(B_WIN_PP, PIXEL_FILL(14));
+        AddTextPrinterParameterized4(B_WIN_PP, FONT_SMALL_NARROW, 0, 1, 0, 0, sQolInfoColors, TEXT_SKIP_DRAW, typeName);
+        CopyWindowToVram(B_WIN_PP, COPYWIN_GFX);
+    }
+    else
+    {
+        AddTextPrinterParameterized4(B_WIN_MOVE_TYPE, FONT_SMALL_NARROW, typeX, 1, 0, 0, sQolInfoColors, TEXT_SKIP_DRAW, typeName);
+    }
+    AddTextPrinterParameterized4(B_WIN_MOVE_TYPE, FONT_SMALL_NARROW, 0, 1, 0, 0, sQolInfoColors, TEXT_SKIP_DRAW, text);
     CopyWindowToVram(B_WIN_MOVE_TYPE, COPYWIN_GFX);
 }
 
