@@ -114,3 +114,20 @@ Wild encounters and starters have separate toggles. Both players use the same se
 - **Updated ROM:** regenerate player scripts from the matching ELF. Save compatibility across development builds is not guaranteed.
 
 A BPS release patch can be generated from a user-supplied original English Emerald ROM; the build instructions describe the command. No original ROM is included in the repository.
+
+## Quality-of-life tools
+
+Open **SOUL LINK**, then press **START** for Tools:
+
+- **Teleport** opens the Fly map for destinations you have already visited. No badge or Fly user is required, and you can leave buildings and caves.
+- **Heal Party** restores living Pokémon's HP, PP, and status. Permanent deaths remain permanent.
+- **Pokemon PC** opens normal Pokémon storage. Paired-party rules still apply.
+- **Auto-run** is a saved personal preference. Once you receive running shoes, run without holding B; hold B to walk. Normal terrain restrictions apply.
+
+Select a Pokémon in your overworld party for **Set Level**, **Learn Moves**, or **Rename**. Set Level supports levels 1–100: UP/DOWN changes by one, LEFT/RIGHT by ten, A applies, and B cancels. Level changes preserve EVs, IVs, friendship, moves, status, PP, and HP proportion. Raising levels offers eligible evolutions; lowering does not undo evolution or equipped moves. Learn Moves freely teaches level-up moves available at the current level from the Pokémon and its pre-evolutions. Eggs cannot use these actions, and dead Pokémon cannot change level or learn moves.
+
+During move selection in battle, **SELECT** opens move information. **A**, LEFT/RIGHT, or L/R switches between statistics and the description; **B** or SELECT closes it. **START** reorders moves. The regular move display shows type-chart multipliers (left/right opponent in doubles). The preview shows base power and accuracy, not damage or final hit chance; it does not account for abilities. `Var` marks variable power or the matchup for type-changing moves such as Hidden Power and Weather Ball. `--` means not applicable or no normal accuracy check.
+
+The host independently controls Teleport, Heal Party, Set Level, Learn Moves, and menu PC access in room settings. These permissions default on for new rooms and lock when both players confirm. Older configurations retain their previous bits and do not silently enable tools. Rename, battle information, and auto-run are personal conveniences. Gameplay tools are unavailable during battles and special challenge/link modes. Both players must use the same rebuilt game package.
+
+Linked Pokémon show a small icon of their partner’s species in the party menu and beside their battle HP card (including doubles). These identify the partner, not connection health or battle eligibility: known partners remain visible after disconnection or death. Icons are absent until partner species data is available.

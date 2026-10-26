@@ -25,9 +25,15 @@ class Rules(IntFlag):
     NO_LEGENDS = 2048
     NO_BATTLE_ITEMS = 4096
     FORCE_SET = 8192
+    QOL_TELEPORT = 1 << 24
+    QOL_HEAL = 1 << 25
+    QOL_LEVEL = 1 << 26
+    QOL_MOVES = 1 << 27
+    QOL_PC = 1 << 28
 
 
-DEFAULT_RULES = int(Rules.DUPES | Rules.PAIRED_PARTY | Rules.WIPE)
+QOL_RULES = sum(1 << bit for bit in range(24, 29))
+DEFAULT_RULES = int(Rules.DUPES | Rules.PAIRED_PARTY | Rules.WIPE) | QOL_RULES
 
 
 # Starting options share the existing 32-bit configuration word.
@@ -50,10 +56,10 @@ def integer(value, low=0, high=0xFFFFFFFF):
 
 
 def validate_rules(value):
-    value = integer(value, 0, 0xFFFFFF)
+    value = integer(value, 0, 0x1FFFFFFF)
     if ((value >> 14) & 3) > 2 or ((value >> 18) & 31) > 19:
         raise ProtocolError("invalid starting game options")
-    if not value & START_OPTIONS and value >> 14:
+    if not value & START_OPTIONS and value & 0x7FC000:
         raise ProtocolError("starting options require the presence flag")
     return value
 

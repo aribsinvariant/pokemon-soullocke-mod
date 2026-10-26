@@ -657,6 +657,9 @@ struct
     TaskFunc func;
 } static const sCursorOptions[] =
 {
+    [MENU_QOL_LEVEL] = {sQolLevelText, CursorCb_QolLevel},
+    [MENU_QOL_MOVES] = {sQolMovesText, CursorCb_QolMoves},
+    [MENU_QOL_RENAME] = {sQolRenameText, CursorCb_QolRename},
     [MENU_SUMMARY] = {gText_Summary5, CursorCb_Summary},
     [MENU_SWITCH] = {gText_Switch2, CursorCb_Switch},
     [MENU_CANCEL1] = {gText_Cancel2, CursorCb_Cancel1},

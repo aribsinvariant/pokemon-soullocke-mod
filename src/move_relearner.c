@@ -1,4 +1,6 @@
 #include "global.h"
+#include "soul_qol.h"
+#include "soul_link.h"
 #include "main.h"
 #include "battle.h"
 #include "bg.h"
@@ -157,7 +159,8 @@ enum {
 #define GFXTAG_UI       5525
 #define PALTAG_UI       5526
 
-#define MAX_RELEARNER_MOVES max(MAX_LEVEL_UP_MOVES, 25)
+#define MAX_RELEARNER_MOVES (QOL_MAX_LEARN_MOVES + 1)
+static EWRAM_DATA MainCallback sPartyReturnCallback = NULL;
 
 static EWRAM_DATA struct
 {
@@ -370,8 +373,16 @@ static void VBlankCB_MoveRelearner(void)
 }
 
 // Script arguments: The Pokémon to teach is in VAR_0x8004
+void OpenPartyMoveRelearner(u8 slot, MainCallback callback)
+{
+    sPartyReturnCallback = callback;
+    gSpecialVar_0x8004 = slot;
+    SetMainCallback2(CB2_InitLearnMove);
+}
+
 void TeachMoveRelearnerMove(void)
 {
+    sPartyReturnCallback = NULL;
     LockPlayerFieldControls();
     CreateTask(Task_WaitForFadeOut, 10);
     // Fade to black
@@ -520,6 +531,12 @@ static void DoMoveRelearnerMain(void)
 
             if (selection == 0)
             {
+                if (sPartyReturnCallback != NULL && (!SoulQol_CanUse(SOUL_QOL_MOVES)
+                    || SoulQol_IsDead(&gPlayerParty[sMoveRelearnerStruct->partyMon])))
+                {
+                    sMoveRelearnerStruct->state = MENU_STATE_FADE_AND_RETURN;
+                    break;
+                }
                 if (GiveMoveToMon(&gPlayerParty[sMoveRelearnerStruct->partyMon], GetCurrentSelectedMove()) != MON_HAS_MAX_MOVES)
                 {
                     PrintMessageWithPlaceholders(gText_MoveRelearnerPkmnLearnedMove);
@@ -679,7 +696,9 @@ static void DoMoveRelearnerMain(void)
         if (!gPaletteFade.active)
         {
             FreeMoveRelearnerResources();
-            SetMainCallback2(CB2_ReturnToField);
+            MainCallback callback = sPartyReturnCallback;
+            sPartyReturnCallback = NULL;
+            SetMainCallback2(callback != NULL ? callback : CB2_ReturnToField);
         }
         break;
     case MENU_STATE_FADE_FROM_SUMMARY_SCREEN:
@@ -707,6 +726,12 @@ static void DoMoveRelearnerMain(void)
             {
                 u16 move = GetMonData(&gPlayerParty[sMoveRelearnerStruct->partyMon], MON_DATA_MOVE1 + sMoveRelearnerStruct->moveSlot);
 
+                if (sPartyReturnCallback != NULL && (!SoulQol_CanUse(SOUL_QOL_MOVES)
+                    || SoulQol_IsDead(&gPlayerParty[sMoveRelearnerStruct->partyMon])))
+                {
+                    sMoveRelearnerStruct->state = MENU_STATE_FADE_AND_RETURN;
+                    break;
+                }
                 StringCopy(gStringVar3, gMoveNames[move]);
                 RemoveMonPPBonus(&gPlayerParty[sMoveRelearnerStruct->partyMon], sMoveRelearnerStruct->moveSlot);
                 SetMonMoveSlot(&gPlayerParty[sMoveRelearnerStruct->partyMon], GetCurrentSelectedMove(), sMoveRelearnerStruct->moveSlot);
@@ -900,7 +925,9 @@ static void CreateLearnableMovesList(void)
     s32 i;
     u8 nickname[POKEMON_NAME_LENGTH + 1];
 
-    sMoveRelearnerStruct->numMenuChoices = GetMoveRelearnerMoves(&gPlayerParty[sMoveRelearnerStruct->partyMon], sMoveRelearnerStruct->movesToLearn);
+    sMoveRelearnerStruct->numMenuChoices = sPartyReturnCallback != NULL
+        ? SoulQol_GetLearnMoves(&gPlayerParty[sMoveRelearnerStruct->partyMon], sMoveRelearnerStruct->movesToLearn)
+        : GetMoveRelearnerMoves(&gPlayerParty[sMoveRelearnerStruct->partyMon], sMoveRelearnerStruct->movesToLearn);
 
     for (i = 0; i < sMoveRelearnerStruct->numMenuChoices; i++)
     {

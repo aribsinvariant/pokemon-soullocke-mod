@@ -1,4 +1,6 @@
 #include "global.h"
+#include "soul_link.h"
+#include "soul_partner_icon.h"
 #include "battle.h"
 #include "pokemon.h"
 #include "battle_controllers.h"
@@ -25,6 +27,22 @@
 #include "constants/battle_anim.h"
 #include "constants/rgb.h"
 #include "constants/songs.h"
+
+static EWRAM_DATA u8 sPartnerIconIds[MAX_BATTLERS_COUNT] = {0};
+
+static void UpdatePartnerIcon(u8 healthbox)
+{
+    struct Sprite *owner = &gSprites[healthbox];
+    u8 battler = owner->data[6];
+    u16 species = SPECIES_NONE;
+    if (GetBattlerSide(battler) == B_SIDE_PLAYER
+        && !(gBattleTypeFlags & BATTLE_TYPE_SAFARI)
+        && !((gBattleTypeFlags & (BATTLE_TYPE_INGAME_PARTNER | BATTLE_TYPE_MULTI))
+             && GetBattlerPosition(battler) == B_POSITION_PLAYER_RIGHT))
+        species = SoulLink_GetPartnerSpecies(&gPlayerParty[gBattlerPartyIndexes[battler]]);
+    sPartnerIconIds[battler] = SoulPartnerIcon_Update(sPartnerIconIds[battler], species);
+    SoulPartnerIcon_Follow(sPartnerIconIds[battler], owner, -40, 0);
+}
 
 struct TestingBar
 {
@@ -873,6 +891,8 @@ u8 CreateBattlerHealthboxSprites(u8 battler)
     u8 healthbarSpriteId;
     struct Sprite *healthBarSpritePtr;
 
+    sPartnerIconIds[battler] = SPRITE_NONE;
+
     if (!IsDoubleBattle())
     {
         if (GetBattlerSide(battler) == B_SIDE_PLAYER)
@@ -999,6 +1019,7 @@ static void SpriteCB_HealthBar(struct Sprite *sprite)
 
     sprite->x2 = gSprites[healthboxSpriteId].x2;
     sprite->y2 = gSprites[healthboxSpriteId].y2;
+    UpdatePartnerIcon(healthboxSpriteId);
 }
 
 static void SpriteCB_HealthBoxOther(struct Sprite *sprite)
@@ -1024,6 +1045,7 @@ void SetBattleBarStruct(u8 battler, u8 healthboxSpriteId, s32 maxVal, s32 oldVal
 void SetHealthboxSpriteInvisible(u8 healthboxSpriteId)
 {
     gSprites[healthboxSpriteId].invisible = TRUE;
+    UpdatePartnerIcon(healthboxSpriteId);
     gSprites[gSprites[healthboxSpriteId].hMain_HealthBarSpriteId].invisible = TRUE;
     gSprites[gSprites[healthboxSpriteId].oam.affineParam].invisible = TRUE;
 }
@@ -1031,6 +1053,7 @@ void SetHealthboxSpriteInvisible(u8 healthboxSpriteId)
 void SetHealthboxSpriteVisible(u8 healthboxSpriteId)
 {
     gSprites[healthboxSpriteId].invisible = FALSE;
+    UpdatePartnerIcon(healthboxSpriteId);
     gSprites[gSprites[healthboxSpriteId].hMain_HealthBarSpriteId].invisible = FALSE;
     gSprites[gSprites[healthboxSpriteId].oam.affineParam].invisible = FALSE;
 }
@@ -1043,6 +1066,9 @@ static void UpdateSpritePos(u8 spriteId, s16 x, s16 y)
 
 void DestoryHealthboxSprite(u8 healthboxSpriteId)
 {
+    u8 battler = gSprites[healthboxSpriteId].hMain_Battler;
+    SoulPartnerIcon_Destroy(sPartnerIconIds[battler]);
+    sPartnerIconIds[battler] = SPRITE_NONE;
     DestroySprite(&gSprites[gSprites[healthboxSpriteId].oam.affineParam]);
     DestroySprite(&gSprites[gSprites[healthboxSpriteId].hMain_HealthBarSpriteId]);
     DestroySprite(&gSprites[healthboxSpriteId]);

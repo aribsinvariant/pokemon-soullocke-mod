@@ -12,7 +12,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 import webbrowser
 from .service import Controller
-from .storage import DEFAULT_RULES, RULES
+from .storage import DEFAULT_RULES, RULES, RULE_BITS
 from soullink.relay.model import START_OPTIONS, DEFAULT_START_OPTIONS
 
 
@@ -170,14 +170,18 @@ class Launcher:
         configuration.pack(fill='x', pady=6)
         self.rule_frame = ttk.Frame(configuration, padding=8)
         configuration.add(self.rule_frame, text='Challenge and Nuzlocke rules')
+        qol_frame = ttk.Frame(configuration, padding=8)
+        configuration.add(qol_frame, text='Quality of life')
         self.rules = []
         self.rule_widgets = []
         for i, label in enumerate(RULES):
-            var = tk.BooleanVar(value=bool(DEFAULT_RULES & (1 << i)))
+            var = tk.BooleanVar(value=bool(DEFAULT_RULES & (1 << RULE_BITS[i])))
             var.trace_add('write', self.mark_dirty)
             self.rules.append(var)
-            checkbox = ttk.Checkbutton(self.rule_frame, text=label, variable=var)
-            checkbox.grid(row=i // 2, column=i % 2, sticky='w', padx=(0, 18), pady=2)
+            parent = self.rule_frame if i < 14 else qol_frame
+            row_index = i if i < 14 else i - 14
+            checkbox = ttk.Checkbutton(parent, text=label, variable=var)
+            checkbox.grid(row=row_index // 2, column=row_index % 2, sticky='w', padx=(0, 18), pady=2)
             self.rule_widgets.append(checkbox)
         options = ttk.Frame(configuration, padding=8)
         configuration.add(options, text='Starting game settings')
@@ -269,7 +273,7 @@ class Launcher:
         self.seed.set(str(secrets.randbits(32)))
 
     def rule_mask(self):
-        mask = sum((1 << i) for i, var in enumerate(self.rules) if var.get()) | START_OPTIONS
+        mask = sum((1 << RULE_BITS[i]) for i, var in enumerate(self.rules) if var.get()) | START_OPTIONS
         for (var, choices), shift in zip(self.start_options, (14, 16, 17, 18)):
             mask |= choices.index(var.get()) << shift
         return mask
@@ -405,7 +409,7 @@ class Launcher:
         if not self.settings_dirty or info['locked']:
             self.seed.set(str(info['seed']))
             for i, var in enumerate(self.rules):
-                var.set(bool(info['rules'] & (1 << i)))
+                var.set(bool(info['rules'] & (1 << RULE_BITS[i])))
             options = info['rules'] if info['rules'] & START_OPTIONS else DEFAULT_START_OPTIONS
             for (var, choices), shift, mask in zip(self.start_options, (14, 16, 17, 18), (3, 1, 1, 31)):
                 var.set(choices[(options >> shift) & mask])

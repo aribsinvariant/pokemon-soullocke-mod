@@ -1,4 +1,7 @@
 #include "global.h"
+#include "soul_qol.h"
+#include "field_message_box.h"
+#include "soul_link.h"
 #include "malloc.h"
 #include "bg.h"
 #include "data.h"
@@ -1575,11 +1578,22 @@ static void Task_PCMainMenu(u8 taskId)
             break;
         case MENU_B_PRESSED:
         case OPTION_EXIT:
-            ClearStdWindowAndFrame(task->tWindowId, TRUE);
+            if (gSoulQolPc)
+            {
+                ClearStdWindowAndFrameToTransparent(task->tWindowId, TRUE);
+                HideFieldMessageBox();
+            }
+            else
+                ClearStdWindowAndFrame(task->tWindowId, TRUE);
             UnlockPlayerFieldControls();
-            ScriptContext_Enable();
+            if (!gSoulQolPc) ScriptContext_Enable();
             RemoveWindow(task->tWindowId);
             DestroyTask(taskId);
+            if (gSoulQolPc)
+            {
+                gSoulQolPc = FALSE;
+                SoulLink_OpenTools();
+            }
             break;
         default:
             if (task->tInput == OPTION_WITHDRAW && CountPartyMons() == PARTY_SIZE)

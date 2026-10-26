@@ -1,4 +1,7 @@
 #include "global.h"
+#include "soul_qol.h"
+#include "menu.h"
+#include "pokemon_summary_screen.h"
 #include "battle.h"
 #include "battle_anim.h"
 #include "battle_arena.h"
@@ -36,6 +39,8 @@
 #include "constants/trainers.h"
 #include "constants/rgb.h"
 
+static void QolOpenMoveInfo(void);
+static void QolDrawMatchup(u16 move);
 static void PlayerHandleGetMonData(void);
 static void PlayerHandleSetMonData(void);
 static void PlayerHandleSetRawMonData(void);
@@ -597,6 +602,10 @@ static void HandleInputChooseMove(void)
         }
     }
     else if (JOY_NEW(SELECT_BUTTON))
+    {
+        QolOpenMoveInfo();
+    }
+    else if (JOY_NEW(START_BUTTON))
     {
         if (gNumberOfMovesToChoose > 1 && !(gBattleTypeFlags & BATTLE_TYPE_LINK))
         {
@@ -1505,6 +1514,7 @@ static void MoveSelectionDisplayMoveType(void)
 
     StringCopy(txtPtr, gTypeNames[gBattleMoves[moveInfo->moves[gMoveSelectionCursor[gActiveBattler]]].type]);
     BattlePutTextOnWindow(gDisplayedStringBattle, B_WIN_MOVE_TYPE);
+    QolDrawMatchup(moveInfo->moves[gMoveSelectionCursor[gActiveBattler]]);
 }
 
 static void MoveSelectionCreateCursorAt(u8 cursorPosition, u8 baseTileNum)
@@ -3129,4 +3139,144 @@ static void PlayerHandleEndLinkBattle(void)
 
 static void PlayerCmdEnd(void)
 {
+}
+
+// The info panel occupies the move menu only. Tile 0x340..0x3cb is free
+// below BG1's character data; preserve its underlying menu tilemap.
+static EWRAM_DATA u8 sQolInfoWindow = WINDOW_NONE;
+static EWRAM_DATA bool8 sQolInfoDescription = FALSE;
+static EWRAM_DATA u16 sQolMoveTilemap[5 * 32] = {0};
+static const u8 sQolInfoColors[] = {14, 13, 15};
+static const u8 sQolPhysical[] = _("Physical");
+static const u8 sQolSpecial[] = _("Special");
+static const u8 sQolStatus[] = _("Status");
+static const u8 sQolPower[] = _("Power ");
+static const u8 sQolAcc[] = _("  Acc ");
+static const u8 sQolPP[] = _("  PP ");
+static const u8 sQolSpace[] = _(" ");
+static const u8 sQolSlash[] = _("/");
+static const u8 sQolVariable[] = _("Var");
+static const u8 sQolAlways[] = _("--");
+static const u8 sQolNone[] = _("--");
+static const u8 sQolImmune[] = _("0x");
+static const u8 sQolQuarter[] = _("0.25x");
+static const u8 sQolHalf[] = _("0.5x");
+static const u8 sQolNeutral[] = _("1x");
+static const u8 sQolDouble[] = _("2x");
+static const u8 sQolQuad[] = _("4x");
+static const u8 sQolFoeLeft[] = _("Type L ");
+static const u8 sQolInfoHelp[] = _("  A: desc B: back");
+static const u8 sQolFoeRight[] = _("  R ");
+
+
+static const u8 *QolMultiplierText(u16 move, u8 battler)
+{
+    u16 value;
+    if (move == MOVE_HIDDEN_POWER || move == MOVE_WEATHER_BALL) return sQolVariable;
+    if (!gBattleMoves[move].power || (gAbsentBattlerFlags & gBitTable[battler])) return sQolNone;
+    value = SoulQol_TypeMultiplier(gBattleMoves[move].type, gBattleMons[battler].types[0], gBattleMons[battler].types[1]);
+    switch (value)
+    {
+    case 0: return sQolImmune;
+    case 25: return sQolQuarter;
+    case 50: return sQolHalf;
+    case 200: return sQolDouble;
+    case 400: return sQolQuad;
+    default: return sQolNeutral;
+    }
+}
+
+static void QolDrawMatchup(u16 move)
+{
+    u8 text[40], *end;
+    u8 left = GetBattlerAtPosition(B_POSITION_OPPONENT_LEFT);
+    u8 right = GetBattlerAtPosition(B_POSITION_OPPONENT_RIGHT);
+    // Replace the type label with a compact type + matchup line pair.
+    FillWindowPixelBuffer(B_WIN_MOVE_TYPE, PIXEL_FILL(14));
+    end = StringCopy(text, gTypeNames[gBattleMoves[move].type]);
+    AddTextPrinterParameterized4(B_WIN_MOVE_TYPE, FONT_SMALL_NARROW, 0, 0, 0, 0, sQolInfoColors, TEXT_SKIP_DRAW, text);
+    end = StringCopy(text, QolMultiplierText(move, left));
+    if (IsDoubleBattle())
+    {
+        end = StringCopy(end, sQolSlash);
+        StringCopy(end, QolMultiplierText(move, right));
+    }
+    AddTextPrinterParameterized4(B_WIN_MOVE_TYPE, FONT_SMALL_NARROW, 0, 8, 0, 0, sQolInfoColors, TEXT_SKIP_DRAW, text);
+    CopyWindowToVram(B_WIN_MOVE_TYPE, COPYWIN_GFX);
+}
+
+static void QolPrintInfo(const u8 *text, u8 y)
+{
+    AddTextPrinterParameterized4(sQolInfoWindow, FONT_SMALL, 0, y, 0, 0, sQolInfoColors, TEXT_SKIP_DRAW, text);
+}
+
+static void QolDrawMoveInfo(void)
+{
+    struct ChooseMoveStruct *info = (struct ChooseMoveStruct *)&gBattleBufferA[gActiveBattler][4];
+    u8 slot = gMoveSelectionCursor[gActiveBattler];
+    u16 move = info->moves[slot];
+    u8 text[128], *end;
+    FillWindowPixelBuffer(sQolInfoWindow, PIXEL_FILL(14));
+    if (sQolInfoDescription)
+        QolPrintInfo(gMoveDescriptionPointers[move - 1], 0);
+    else
+    {
+        end = StringCopy(text, gMoveNames[move]);
+        end = StringCopy(end, sQolSpace);
+        end = StringCopy(end, gTypeNames[gBattleMoves[move].type]);
+        end = StringCopy(end, sQolSpace);
+        StringCopy(end, !gBattleMoves[move].power ? sQolStatus : gBattleMoves[move].type < TYPE_MYSTERY ? sQolPhysical : sQolSpecial);
+        QolPrintInfo(text, 0);
+        end = StringCopy(text, sQolPower);
+        if (gBattleMoves[move].power <= 1) end = StringCopy(end, gBattleMoves[move].power ? sQolVariable : sQolNone);
+        else end = ConvertIntToDecimalStringN(end, gBattleMoves[move].power, STR_CONV_MODE_LEFT_ALIGN, 3);
+        end = StringCopy(end, sQolAcc);
+        if (gBattleMoves[move].accuracy) end = ConvertIntToDecimalStringN(end, gBattleMoves[move].accuracy, STR_CONV_MODE_LEFT_ALIGN, 3);
+        else end = StringCopy(end, sQolAlways);
+        end = StringCopy(end, sQolPP);
+        end = ConvertIntToDecimalStringN(end, info->currentPP[slot], STR_CONV_MODE_LEFT_ALIGN, 2);
+        end = StringCopy(end, sQolSlash);
+        ConvertIntToDecimalStringN(end, info->maxPP[slot], STR_CONV_MODE_LEFT_ALIGN, 2);
+        QolPrintInfo(text, 12);
+        end = StringCopy(text, sQolFoeLeft);
+        end = StringCopy(end, QolMultiplierText(move, GetBattlerAtPosition(B_POSITION_OPPONENT_LEFT)));
+        if (IsDoubleBattle())
+        {
+            end = StringCopy(end, sQolFoeRight);
+            end = StringCopy(end, QolMultiplierText(move, GetBattlerAtPosition(B_POSITION_OPPONENT_RIGHT)));
+        }
+        StringCopy(end, sQolInfoHelp);
+        QolPrintInfo(text, 24);
+    }
+    PutWindowTilemap(sQolInfoWindow);
+    CopyWindowToVram(sQolInfoWindow, COPYWIN_FULL);
+}
+
+static void QolHandleMoveInfo(void)
+{
+    if (JOY_NEW(SELECT_BUTTON | B_BUTTON))
+    {
+        RemoveWindow(sQolInfoWindow);
+        sQolInfoWindow = WINDOW_NONE;
+        CpuCopy16(sQolMoveTilemap, (u16 *)GetBgTilemapBuffer(0) + 54 * 32, sizeof(sQolMoveTilemap));
+        CopyBgTilemapBufferToVram(0);
+        gBattlerControllerFuncs[gActiveBattler] = HandleInputChooseMove;
+    }
+    else if (JOY_NEW(DPAD_LEFT | DPAD_RIGHT | L_BUTTON | R_BUTTON | A_BUTTON))
+    {
+        sQolInfoDescription ^= 1;
+        QolDrawMoveInfo();
+    }
+}
+
+static void QolOpenMoveInfo(void)
+{
+    struct WindowTemplate window = { .bg = 0, .tilemapLeft = 1, .tilemapTop = 54,
+        .width = 28, .height = 5, .paletteNum = 5, .baseBlock = 0x340 };
+    sQolInfoWindow = AddWindow(&window);
+    if (sQolInfoWindow == WINDOW_NONE) return;
+    CpuCopy16((u16 *)GetBgTilemapBuffer(0) + 54 * 32, sQolMoveTilemap, sizeof(sQolMoveTilemap));
+    sQolInfoDescription = FALSE;
+    QolDrawMoveInfo();
+    gBattlerControllerFuncs[gActiveBattler] = QolHandleMoveInfo;
 }

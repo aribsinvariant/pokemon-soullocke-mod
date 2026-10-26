@@ -1,4 +1,5 @@
 #include "global.h"
+#include "soul_qol.h"
 #include "main.h"
 #include "text.h"
 #include "menu.h"
@@ -1662,7 +1663,8 @@ void CB2_OpenFlyMap(void)
         sFlyMap = Alloc(sizeof(*sFlyMap));
         if (sFlyMap == NULL)
         {
-            SetMainCallback2(CB2_ReturnToFieldWithOpenMenu);
+            if (SoulQol_IsFlying()) SoulQol_FinishFly(FALSE);
+            else SetMainCallback2(CB2_ReturnToFieldWithOpenMenu);
         }
         else
         {
@@ -2013,11 +2015,13 @@ static void CB_ExitFlyMap(void)
                         SetWarpDestinationToMapWarp(sMapHealLocations[sFlyMap->regionMap.mapSecId][0], sMapHealLocations[sFlyMap->regionMap.mapSecId][1], WARP_ID_NONE);
                     break;
                 }
-                ReturnToFieldFromFlyMapSelect();
+                if (SoulQol_IsFlying()) SoulQol_FinishFly(TRUE);
+                else ReturnToFieldFromFlyMapSelect();
             }
             else
             {
-                SetMainCallback2(CB2_ReturnToPartyMenuFromFlyMap);
+                if (SoulQol_IsFlying()) SoulQol_FinishFly(FALSE);
+                else SetMainCallback2(CB2_ReturnToPartyMenuFromFlyMap);
             }
             TRY_FREE_AND_SET_NULL(sFlyMap);
             FreeAllWindowBuffers();

@@ -36,3 +36,14 @@ data/maps/PacifidlogTown_House3/scripts.inc
 data/maps/RustboroCity_House1/scripts.inc
 src/item.c
 src/battle_main.c
+include/soul_qol.h
+src/soul_qol.c
+src/move_relearner.c
+include/move_relearner.h
+src/region_map.c
+src/data/party_menu.h
+src/battle_controller_player.c
+include/constants/flags.h
+src/battle_interface.c
+src/soul_partner_icon.c
+include/soul_partner_icon.h

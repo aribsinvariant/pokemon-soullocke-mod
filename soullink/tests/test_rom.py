@@ -56,6 +56,267 @@ class RomTests(unittest.TestCase):
         self.call('SoulLink_Receive',self.party)
         return self.call('GetMonData3',self.party,self.fields['MON_DATA_SOUL_ID'],0)
 
+    def test_partner_species_lookup(self):
+        for soul_id in (20, 512):
+            self.linked_party_mon(0, soul_id)
+            remote = self.box + 160 + (soul_id - 1) * 18
+            self.assertEqual(self.call('SoulLink_GetPartnerSpecies', self.party), 0)
+            self.write(remote + 12, 25, 2)
+            self.assertEqual(self.call('SoulLink_GetPartnerSpecies', self.party), 25)
+            self.write(self.box + 20, 0)  # Cached identity survives disconnection.
+            self.write(self.save + 20 + soul_id - 1, 3, 1)
+            self.assertEqual(self.call('SoulLink_GetPartnerSpecies', self.party), 25)
+            self.set_mon_field('MON_DATA_IS_EGG', 1)
+            self.assertEqual(self.call('SoulLink_GetPartnerSpecies', self.party), 0)
+            self.set_mon_field('MON_DATA_IS_EGG', 0)
+            for state in (0, 1, 4):
+                self.write(self.save + 20 + soul_id - 1, state, 1)
+                self.assertEqual(self.call('SoulLink_GetPartnerSpecies', self.party), 0)
+            self.write(self.save + 20 + soul_id - 1, 2, 1)
+            for species in (0, 412, 65535):
+                self.write(remote + 12, species, 2)
+                self.assertEqual(self.call('SoulLink_GetPartnerSpecies', self.party), 0)
+            self.write(remote + 12, 25, 2)
+            for invalid_id in (0, 513, 65535):
+                self.set_mon_field('MON_DATA_SOUL_ID', invalid_id)
+                self.assertEqual(self.call('SoulLink_GetPartnerSpecies', self.party), 0)
+        self.set_mon_field('MON_DATA_SOUL_ID', 512)
+        self.write(self.save, 0)
+        self.assertEqual(self.call('SoulLink_GetPartnerSpecies', self.party), 0)
+
+    def test_partner_icon_resources_and_refresh(self):
+        self.call('ResetSpriteData')
+        self.call('FreeAllSpritePalettes')
+        # Two icons share an owned palette; removing one must not release it.
+        first = self.call('SoulPartnerIcon_Update', 255, 25)
+        second = self.call('SoulPartnerIcon_Update', 255, 25)
+        self.assertLess(first, 64)
+        self.assertLess(second, 64)
+        palette_tag = 0xf210 + self.call('GetValidMonIconPalIndex', 25)
+        palette = self.call('IndexOfSpritePaletteTag', palette_tag)
+        self.assertLess(palette, 16)
+        self.assertEqual(self.call('SoulPartnerIcon_Update', first, 25), first)
+        self.call('SoulPartnerIcon_Destroy', first)
+        self.assertEqual(self.call('IndexOfSpritePaletteTag', palette_tag), palette)
+        self.call('SoulPartnerIcon_Destroy', second)
+        self.assertEqual(self.call('IndexOfSpritePaletteTag', palette_tag), 255)
+        # Repeated replacements release tiles and palettes, including removal.
+        icon = 255
+        for _ in range(80):
+            for species in (1, 4, 7, 25):
+                icon = self.call('SoulPartnerIcon_Update', icon, species)
+                self.assertLess(icon, 64)
+        self.assertEqual(self.call('SoulPartnerIcon_Update', icon, 0), 255)
+        # Saturating palettes must fail safely and permit a later retry.
+        for i in range(16):
+            self.call('AllocSpritePalette', 0xe000 + i)
+        self.assertEqual(self.call('SoulPartnerIcon_Update', 255, 25), 255)
+        self.call('FreeAllSpritePalettes')
+        icon = self.call('SoulPartnerIcon_Update', 255, 25)
+        self.assertLess(icon, 64)
+        self.call('SoulPartnerIcon_Destroy', icon)
+        # Existing party icon palettes are borrowed and must not be freed.
+        self.call('LoadMonIconPalette', 25)
+        tag = 56000 + self.call('GetValidMonIconPalIndex', 25)
+        palette = self.call('IndexOfSpritePaletteTag', tag)
+        self.assertLess(palette, 16)
+        icon = self.call('SoulPartnerIcon_Update', 255, 25)
+        self.call('SoulPartnerIcon_Destroy', icon)
+        self.assertEqual(self.call('IndexOfSpritePaletteTag', tag), palette)
+
+    def test_partner_healthbox_switch_visibility_and_doubles(self):
+        self.call('ResetSpriteData')
+        self.call('FreeAllSpritePalettes')
+        self.write(self.symbols['gBattleTypeFlags'], 1)  # Doubles.
+        for battler in range(4):
+            self.write(self.symbols['gBattlerPositions'] + battler, battler, 1)
+        self.call('BattleLoadAllHealthBoxesGfxAtOnce')
+        for slot, species in enumerate((25, 133)):
+            self.linked_party_mon(slot, slot + 1)
+            self.write(self.box + 160 + slot * 18 + 12, species, 2)
+        healthboxes = []
+        for battler, slot in ((0, 0), (2, 1), (1, 0)):
+            self.write(self.symbols['gBattlerPartyIndexes'] + battler * 2, slot, 2)
+            healthbox = self.call('CreateBattlerHealthboxSprites', battler)
+            self.write(self.symbols['gHealthboxSpriteIds'] + battler, healthbox, 1)
+            self.call('InitBattlerHealthboxCoords', battler)
+            self.call('SetHealthboxSpriteVisible', healthbox)
+            healthboxes.append(healthbox)
+        icons = [self.read(self.symbols['sPartnerIconIds'] + b, 1) for b in range(4)]
+        self.assertLess(icons[0], 64)
+        self.assertLess(icons[2], 64)
+        self.assertEqual(icons[1], 255)  # Enemy never receives a partner icon.
+        sprite = self.symbols['gSprites'] + icons[0] * 68
+        owner = self.symbols['gSprites'] + healthboxes[0] * 68
+        self.assertEqual(self.read(sprite + 0x20, 2), self.read(owner + 0x20, 2) - 40)
+        self.assertEqual(self.read(sprite + 0x22, 2), self.read(owner + 0x22, 2))
+        self.call('SetHealthboxSpriteInvisible', healthboxes[0])
+        self.assertTrue(self.read(sprite + 0x3e, 1) & 4)
+        self.call('SetHealthboxSpriteVisible', healthboxes[0])
+        self.assertFalse(self.read(sprite + 0x3e, 1) & 4)
+        self.write(self.symbols['gBattlerPartyIndexes'], 1, 2)
+        self.call('SetHealthboxSpriteVisible', healthboxes[0])
+        switched = self.read(self.symbols['sPartnerIconIds'], 1)
+        self.assertEqual(self.read(self.symbols['gSprites'] + switched * 68 + 0x2e, 2), 133)
+        for healthbox in healthboxes:
+            self.call('DestoryHealthboxSprite', healthbox)
+        self.assertEqual(self.read(self.symbols['sPartnerIconIds'], 1), 255)
+        self.assertEqual(self.read(self.symbols['sPartnerIconIds'] + 2, 1), 255)
+
+    def test_partner_party_icons_follow_reordering_and_remote_updates(self):
+        for slot, species in enumerate((25, 133, 7, 4, 1, 143)):
+            self.linked_party_mon(slot, slot + 1)
+            self.write(self.box + 160 + slot * 18 + 12, species, 2)
+        self.call('InitPartyMenu', 0, 0, 0, 0, 0,
+                  self.symbols['Task_HandleChooseMonInput'] | 1,
+                  self.symbols['CB2_ReturnToField'] | 1)
+        self.lib.sl_run(self.h, 100, 0)
+        boxes = self.read(self.symbols['sPartyMenuBoxes'])
+        def partner_species(slot):
+            icon = self.read(boxes + slot * 16 + 10, 1)
+            self.assertLess(icon, 64)
+            return self.read(self.symbols['gSprites'] + icon * 68 + 0x2e, 2)
+        self.assertEqual([partner_species(i) for i in range(6)], [25, 133, 7, 4, 1, 143])
+        self.write(self.symbols['gPartyMenu'] + 9, 0, 1)
+        self.write(self.symbols['gPartyMenu'] + 10, 1, 1)
+        self.call('SwitchPartyMon')
+        self.lib.sl_run(self.h, 2, 0)
+        self.assertEqual([partner_species(i) for i in range(2)], [133, 25])
+        self.write(self.box + 160 + 12, 26, 2)  # Partner evolved while menu stayed open.
+        self.lib.sl_run(self.h, 2, 0)
+        self.assertEqual(partner_species(1), 26)
+        self.set_mon_field('MON_DATA_SOUL_ID', 0, 1)
+        self.lib.sl_run(self.h, 2, 0)
+        self.assertEqual(self.read(boxes + 16 + 10, 1), 255)
+        self.call('FreePartyPointers')
+        self.assertEqual(self.read(self.symbols['sPartyMenuBoxes']), 0)
+
+    def enable_qol(self):
+        self.write(self.box + 32, 0x1f000000)
+        self.call('SoulLink_Frame')
+
+    def set_mon_field(self, field, value, slot=0):
+        scratch = 0x0203ffe0
+        self.write(scratch, value)
+        self.call('SetMonData', self.party + slot * 100, self.fields[field], scratch)
+
+    def mon_field(self, field, slot=0):
+        return self.call('GetMonData3', self.party + slot * 100, self.fields[field], 0)
+
+    def test_qol_level_round_trip_preserves_identity_and_hp_ratio(self):
+        self.enable_qol()
+        self.linked_party_mon(0, 20)
+        self.set_mon_field('MON_DATA_HP', 7)
+        self.set_mon_field('MON_DATA_STATUS', 8)
+        self.set_mon_field('MON_DATA_PP1', 2)
+        before = {key: self.mon_field(key) for key in
+                  ('MON_DATA_PERSONALITY', 'MON_DATA_OT_ID', 'MON_DATA_IVS',
+                   'MON_DATA_HP_EV', 'MON_DATA_FRIENDSHIP', 'MON_DATA_SOUL_ID',
+                   'MON_DATA_MOVE1', 'MON_DATA_STATUS', 'MON_DATA_PP1')}
+        old_max = self.mon_field('MON_DATA_MAX_HP')
+        self.assertEqual(self.call('SoulQol_SetLevel', self.party, 100), 1)
+        self.assertEqual(self.mon_field('MON_DATA_LEVEL'), 100)
+        new_max = self.mon_field('MON_DATA_MAX_HP')
+        self.assertEqual(self.mon_field('MON_DATA_HP'), (7 * new_max + old_max - 1) // old_max)
+        for key, value in before.items():
+            self.assertEqual(self.mon_field(key), value, key)
+        self.assertEqual(self.call('SoulQol_SetLevel', self.party, 1), 1)
+        self.assertEqual(self.mon_field('MON_DATA_LEVEL'), 1)
+        self.assertEqual(self.mon_field('MON_DATA_EXP'), 1)  # Emerald's level-one threshold.
+        for level in (0, 101):
+            self.assertEqual(self.call('SoulQol_SetLevel', self.party, level), 0)
+        self.write(self.box + 32, 0)
+        self.call('SoulLink_Frame')
+        self.assertEqual(self.call('SoulQol_SetLevel', self.party, 50), 0)
+
+    def test_qol_heal_and_level_protect_local_and_pending_remote_deaths(self):
+        self.enable_qol()
+        for slot in range(3):
+            self.linked_party_mon(slot, slot + 1)
+            self.set_mon_field('MON_DATA_HP', 1, slot)
+            self.set_mon_field('MON_DATA_STATUS', 8, slot)
+            self.set_mon_field('MON_DATA_PP1', 0, slot)
+        self.write(self.save + 20 + 1, 3, 1)
+        self.write(self.party + 100 + 86, 0, 2)
+        self.write(self.box + 160 + 2 * 18 + 16, 3, 1)
+        self.call('SoulQol_HealParty')
+        self.assertEqual(self.mon_field('MON_DATA_HP'), self.mon_field('MON_DATA_MAX_HP'))
+        self.assertEqual(self.mon_field('MON_DATA_STATUS'), 0)
+        self.assertGreater(self.mon_field('MON_DATA_PP1'), 0)
+        self.assertEqual(self.read(self.party + 100 + 86, 2), 0)
+        self.assertEqual(self.read(self.party + 200 + 86, 2), 1)
+        for slot in (1, 2):
+            self.assertEqual(self.call('SoulQol_SetLevel', self.party + slot * 100, 50), 0)
+            self.assertEqual(self.mon_field('MON_DATA_PP1', slot), 0)
+
+    def test_qol_learn_moves_include_ancestors_but_not_siblings_or_future_moves(self):
+        self.enable_qol()
+        self.linked_party_mon(0, 20, species=26)  # Raichu: inherits Pikachu and Pichu.
+        self.assertEqual(self.call('SoulQol_SetLevel', self.party, 30), 1)
+        for i in range(4):
+            self.set_mon_field('MON_DATA_MOVE' + str(i + 1), 0)
+        buffer = self.call('AllocZeroed', 256)
+        self.assertTrue(buffer)
+        count = self.call('SoulQol_GetLearnMoves', self.party, buffer)
+        moves = [self.read(buffer + 2*i, 2) for i in range(count)]
+        self.assertIn(21, moves)  # Pikachu Slam, absent from Raichu learnset.
+        self.assertIn(204, moves)  # Pichu Charm.
+        self.assertNotIn(87, moves)  # Pikachu Thunder, level 41.
+        self.assertEqual(len(moves), len(set(moves)))
+        self.set_mon_field('MON_DATA_MOVE1', 98)
+        count = self.call('SoulQol_GetLearnMoves', self.party, buffer)
+        self.assertNotIn(98, [self.read(buffer + 2*i, 2) for i in range(count)])
+        self.call('Free', buffer)
+
+    def test_qol_party_level_picker_applies_and_returns(self):
+        self.enable_qol()
+        self.linked_party_mon(0, 20)
+        self.call('InitPartyMenu', 0, 0, 0, 0, 0,
+                  self.symbols['Task_HandleChooseMonInput'] | 1,
+                  self.symbols['CB2_ReturnToFieldWithOpenMenu'] | 1)
+        def press(key):
+            self.lib.sl_run(self.h, 1, key)
+            self.lib.sl_run(self.h, 3, 0)
+        self.lib.sl_run(self.h, 80, 0)
+        press(1)  # Select Pokémon.
+        self.lib.sl_run(self.h, 10, 0)
+        press(128); press(128); press(1)  # Summary, Item, Set Level.
+        self.lib.sl_run(self.h, 60, 0)
+        press(64); press(1)  # Raise from five to six and apply.
+        self.lib.sl_run(self.h, 100, 0)
+        self.assertEqual(self.mon_field('MON_DATA_LEVEL'), 6)
+        self.assertEqual(self.read(self.symbols['gMain'] + 4) & ~1,
+                         self.symbols['CB2_UpdatePartyMenu'] & ~1)
+
+    def test_qol_pc_menu_returns_without_dialog_frame(self):
+        self.call('SetMainCallback2', self.symbols['CB2_NewGame'] | 1)
+        self.lib.sl_run(self.h, 600, 0)
+        self.call('ScriptContext_Init')
+        self.call('UnlockPlayerFieldControls')
+        self.call('SoulLink_OpenTools')
+        self.lib.sl_run(self.h, 60, 0)
+        def press(key):
+            self.lib.sl_run(self.h, 20, key)
+            self.lib.sl_run(self.h, 20, 0)
+        press(128); press(128); press(1)
+        self.assertEqual(self.read(self.symbols['gSoulQolPc'], 1), 1)
+        press(2)
+        self.assertEqual(self.read(self.symbols['gSoulQolPc'], 1), 0)
+        self.assertEqual(self.call('FuncIsActiveTask', self.symbols['MenuTask'] | 1), 1)
+        tilemap = self.call('GetBgTilemapBuffer', 0)
+        # Tools ends at row 18. The PC dialogue's bottom border must be gone.
+        for x in range(30):
+            self.assertEqual(self.read(tilemap + 2 * (19 * 32 + x), 2) & 0x3ff, 0)
+
+    def test_qol_type_preview_is_pure_and_handles_dual_types(self):
+        rng = self.symbols['gRngValue']
+        before = self.read(rng)
+        # Fire vs Grass/Bug, Water/Dragon; Normal vs Ghost; repeated Grass type.
+        for args, expected in [((10, 12, 6), 400), ((10, 11, 16), 25),
+                               ((0, 7, 7), 0), ((10, 12, 12), 200), ((0, 0, 0), 100)]:
+            self.assertEqual(self.call('SoulQol_TypeMultiplier', *args), expected)
+        self.assertEqual(self.read(rng), before)
+
     def test_battle_item_rule_keeps_balls_and_field_items(self):
         potion, ball, x_attack = 13, 4, 75
         self.write(self.box + 32, 1 << 12)

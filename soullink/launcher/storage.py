@@ -19,6 +19,11 @@ RULES = (
 )
 
 
+QOL_RULES = ('Teleport to visited places', 'Heal party from menu',
+             'Adjust party levels', 'Learn level-up moves', 'Menu Pokémon PC')
+RULE_BITS = tuple(range(14)) + tuple(range(24, 29))
+RULES += QOL_RULES
+
 def app_directory():
     if os.name == 'nt':
         return Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local')) / 'EmeraldSoulLink'

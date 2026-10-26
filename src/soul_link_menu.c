@@ -1,4 +1,8 @@
 #include "global.h"
+#include "soul_qol.h"
+#include "event_data.h"
+#include "field_weather.h"
+#include "constants/flags.h"
 #include "soul_link.h"
 #include "pokemon.h"
 #include "pokemon_storage_system.h"
@@ -24,6 +28,19 @@ static const u8 sPartyTitle[] = _("Partner requested party:");
 static const u8 sNoParty[] = _("No pending party request.");
 static const u8 sPartyHelp[] = _("R: accept   L: encounters   B: close");
 static const u8 sPartyRejected[] = _("Party rejected: check links and types.");
+static const u8 sToolsTitle[] = _("TOOLS - START: back");
+static const u8 sTeleport[] = _("Teleport");
+static const u8 sHeal[] = _("Heal Party");
+static const u8 sPc[] = _("Pokemon PC");
+static const u8 sAutoRun[] = _("Auto-run");
+static const u8 sToolsHelp[] = _("A: use   B: back");
+static const u8 sToolsDisabled[] = _("Disabled by host.");
+static const u8 sHealed[] = _("Living party healed!");
+static const u8 *const sTools[] = {sTeleport, sHeal, sPc, sAutoRun};
+static const u32 sToolPermissions[] = {SOUL_QOL_TELEPORT, SOUL_QOL_HEAL, SOUL_QOL_PC, 0};
+static const u8 sQolLevel[] = _("Adjust levels");
+static const u8 sQolMoves[] = _("Learn Moves");
+static const u8 *const sQolRules[] = {sTeleport, sHeal, sQolLevel, sQolMoves, sPc};
 static const u8 sTitle[] = _("SOUL LINK");
 static const u8 sRule0[] = _("Duplicate family rerolls");
 static const u8 sRule1[] = _("Shiny collectibles");
@@ -61,7 +78,7 @@ static const u8 sSoulText7[] = _(" OFF");
 static const u8 sSoulText8[] = _("Seed: ");
 static const u8 sSoulText9[] = _("Confirmed - waiting for partner");
 static const u8 sSoulText10[] = _("A: confirm these settings");
-static const u8 sSoulText11[] = _("B: close  L: party  SELECT: reopen");
+static const u8 sSoulText11[] = _("START: tools   L: party   B: close");
 static const u8 sSoulText12[] = _("Starter pair");
 static const u8 sSoulText13[] = _("Gift/static allowance");
 static const u8 sSoulText14[] = _("Encounter allowance");
@@ -102,6 +119,16 @@ void SoulLink_OpenMenu(void)
     Draw(task);
 }
 
+void SoulLink_OpenTools(void)
+{
+    u8 task;
+    SoulLink_OpenMenu();
+    task = FindTaskIdByFunc(MenuTask);
+    if (task == TASK_NONE) return;
+    gTasks[task].data[5] = 1;
+    Draw(task);
+}
+
 static void Draw(u8 taskId)
 {
     struct Task *task = &gTasks[taskId];
@@ -112,13 +139,25 @@ static void Draw(u8 taskId)
     FillWindowPixelBuffer(win, PIXEL_FILL(1));
     Print(win, sTitle, 0);
     Print(win, box->connection == 3 ? sSoulText0 : box->connection == 2 ? sSoulText1 : sSoulText2, 14);
-    if (!box->locked)
+    if (task->data[5])
+    {
+        Print(win, sToolsTitle, 30);
+        for (i = 0; i < 4; i++)
+        {
+            end = StringCopy(buffer, i == task->data[6] ? sSoulText4 : sSoulText5);
+            end = StringCopy(end, sTools[i]);
+            StringCopy(end, (i == 3 ? FlagGet(FLAG_QOL_AUTO_RUN) : SoulQol_CanUse(sToolPermissions[i])) ? sSoulText6 : sSoulText7);
+            Print(win, buffer, 48 + i * 16);
+        }
+        Print(win, task->data[7] == 1 ? sHealed : task->data[7] == 2 ? sToolsDisabled : sToolsHelp, 126);
+    }
+    else if (!box->locked)
     {
         Print(win, sSoulText3, 30);
         for (line = 0; line < 4; line++)
         {
             i = (selection / 4) * 4 + line;
-            if (i >= 20)
+            if (i >= 25)
                 break;
             end = StringCopy(buffer, i == selection ? sSoulText4 : sSoulText5);
             if (i < 14)
@@ -154,6 +193,11 @@ static void Draw(u8 taskId)
             {
                 end = StringCopy(end, sSoulText8);
                 ConvertIntToDecimalStringN(end, box->seed, STR_CONV_MODE_LEFT_ALIGN, 10);
+            }
+            else if (i >= 20)
+            {
+                end = StringCopy(end, sQolRules[i - 20]);
+                StringCopy(end, box->rules & (1u << (i + 4)) ? sSoulText6 : sSoulText7);
             }
             else
                 StringCopy(end, box->confirmed ? sSoulText9 : sSoulText10);
@@ -211,6 +255,43 @@ static void MenuTask(u8 taskId)
     struct Task *task = &gTasks[taskId];
     volatile struct SoulMailbox *box = &gSoulLinkMailbox;
     u16 sel = task->data[2], area, count;
+    if (JOY_NEW(START_BUTTON))
+    {
+        task->data[5] ^= 1;
+        task->data[7] = 0;
+        Draw(taskId);
+        return;
+    }
+    if (task->data[5])
+    {
+        u8 choice = task->data[6];
+        if (JOY_NEW(B_BUTTON)) task->data[5] = 0;
+        if (JOY_NEW(DPAD_UP)) task->data[6] = (choice + 3) % 4;
+        if (JOY_NEW(DPAD_DOWN)) task->data[6] = (choice + 1) % 4;
+        if (JOY_NEW(A_BUTTON))
+        {
+            task->data[7] = 0;
+            if (choice == 3)
+            {
+                if (FlagGet(FLAG_QOL_AUTO_RUN)) FlagClear(FLAG_QOL_AUTO_RUN);
+                else FlagSet(FLAG_QOL_AUTO_RUN);
+            }
+            else if (!SoulQol_CanUse(sToolPermissions[choice])) task->data[7] = 2;
+            else if (choice == 1) { SoulQol_HealParty(); task->data[7] = 1; }
+            else
+            {
+                ClearWindowTilemap(task->data[0]);
+                CopyWindowToVram(task->data[0], COPYWIN_MAP);
+                RemoveWindow(task->data[0]);
+                DestroyTask(taskId);
+                if (choice == 0) SoulQol_OpenFlyMap();
+                else { gSoulQolPc = TRUE; ShowPokemonStorageSystemPC(); }
+                return;
+            }
+        }
+        Draw(taskId);
+        return;
+    }
     if (JOY_NEW(B_BUTTON))
     {
         ClearWindowTilemap(task->data[0]);
@@ -222,8 +303,8 @@ static void MenuTask(u8 taskId)
     }
     if (!box->locked)
     {
-        if (JOY_NEW(DPAD_UP)) task->data[2] = (sel + 19) % 20;
-        if (JOY_NEW(DPAD_DOWN)) task->data[2] = (sel + 1) % 20;
+        if (JOY_NEW(DPAD_UP)) task->data[2] = (sel + 24) % 25;
+        if (JOY_NEW(DPAD_DOWN)) task->data[2] = (sel + 1) % 25;
         if (box->player == 0 && box->connection == 2 && JOY_NEW(DPAD_LEFT | DPAD_RIGHT))
         {
             if (sel < 14)
@@ -238,6 +319,8 @@ static void MenuTask(u8 taskId)
                 rules = (rules & ~((u32)mask << shift)) | ((u32)value << shift);
                 SoulLink_SendSettings(rules, box->seed, FALSE);
             }
+            else if (sel >= 20)
+                SoulLink_SendSettings(box->rules ^ (1u << (sel + 4)), box->seed, FALSE);
             else if (sel == 18)
                 SoulLink_SendSettings(box->rules, box->seed + (JOY_NEW(DPAD_RIGHT) ? 1 : -1), FALSE);
         }

@@ -58,7 +58,7 @@ class EndToEndTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.sleep(5.2)
                 self.assertFalse(relay.clients)
                 await tick_until(lambda:all(t.read(t.box+20)==2 for t in emulators))
-                for t in emulators:t.call('SoulLink_SendSettings',97,1,1)
+                for t in emulators:t.call('SoulLink_SendSettings',state['rules'],1,1)
                 await tick_until(lambda:all(t.read(t.box+40)==1 for t in emulators))
                 for t in emulators:t.mon()
                 await tick_until(lambda:all(t.read(t.box+160+511*18+16,1)==2 for t in emulators))

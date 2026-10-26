@@ -79,7 +79,7 @@ void SoulLink_NewGame(void)
 {
     memset(SAVE, 0, sizeof(*SAVE));
     SAVE->magic = SOUL_MAGIC;
-    SAVE->rules = SOUL_DUPES | SOUL_PAIRED_PARTY | SOUL_WIPE;
+    SAVE->rules = SOUL_DUPES | SOUL_PAIRED_PARTY | SOUL_WIPE | SOUL_QOL_ALL;
     SoulLink_ApplyOptions(SOUL_DEFAULT_OPTIONS);
     SAVE->seed = 1;
     memset((void *)BOX, 0, sizeof(*BOX));
@@ -676,6 +676,21 @@ u16 SoulLink_RandomSpecies(u16 species, u32 key, bool8 starter)
         }
     }
     return best;
+}
+
+// Presentation only: retain known partners even after a linked death or disconnect.
+u16 SoulLink_GetPartnerSpecies(struct Pokemon *mon)
+{
+    u16 id, species;
+    if (!SoulLink_Enabled() || !GetMonData(mon, MON_DATA_SPECIES)
+        || GetMonData(mon, MON_DATA_IS_EGG))
+        return SPECIES_NONE;
+    id = GetMonData(mon, MON_DATA_SOUL_ID);
+    if (!id || id > SOUL_AREAS || SAVE->state[id - 1] < SOUL_LINKED
+        || SAVE->state[id - 1] == SOUL_FORFEITED)
+        return SPECIES_NONE;
+    species = BOX->mons[id - 1].species;
+    return species > SPECIES_NONE && species < SPECIES_EGG ? species : SPECIES_NONE;
 }
 
 bool8 SoulLink_Memo(struct Pokemon *mon, u8 *text)

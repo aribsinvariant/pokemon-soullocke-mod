@@ -20,6 +20,12 @@
 #define SOUL_NO_LEGENDS (1 << 11)
 #define SOUL_NO_BATTLE_ITEMS (1 << 12)
 #define SOUL_FORCE_SET (1 << 13)
+#define SOUL_QOL_TELEPORT (1u << 24)
+#define SOUL_QOL_HEAL (1u << 25)
+#define SOUL_QOL_LEVEL (1u << 26)
+#define SOUL_QOL_MOVES (1u << 27)
+#define SOUL_QOL_PC (1u << 28)
+#define SOUL_QOL_ALL (SOUL_QOL_TELEPORT | SOUL_QOL_HEAL | SOUL_QOL_LEVEL | SOUL_QOL_MOVES | SOUL_QOL_PC)
 #define SOUL_START_OPTIONS (1 << 23)
 #define SOUL_DEFAULT_OPTIONS (SOUL_START_OPTIONS | (2 << 14) | (1 << 16) | (1 << 17))
 #define SOUL_AVAILABLE 0
@@ -78,6 +84,7 @@ void SoulLink_EndEncounter(void);
 bool8 SoulLink_CanCatch(void);
 u16 SoulLink_RandomSpecies(u16 species, u32 key, bool8 starter);
 void SoulLink_OpenMenu(void);
+u16 SoulLink_GetPartnerSpecies(struct Pokemon *mon);
 bool8 SoulLink_Memo(struct Pokemon *mon, u8 *text);
 void SoulLink_NewGame(void);
 void SoulLink_Starter(void);

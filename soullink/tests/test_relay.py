@@ -45,9 +45,27 @@ class StateTests(unittest.TestCase):
         self.store.event('options', 0, 2, 'wipe', [])
         self.assertEqual(self.store.restart('options')['rules'], rules)
 
+    def test_qol_permissions_defaults_legacy_and_host_lock(self):
+        from soullink.relay.model import QOL_RULES, validate_rules
+        from soullink.launcher.storage import RULE_BITS, RULES as LABELS
+        self.assertEqual(DEFAULT_RULES & QOL_RULES, QOL_RULES)
+        self.assertEqual(validate_rules(97), 97)
+        self.assertEqual(len(RULE_BITS), len(LABELS))
+        self.assertEqual(set(RULE_BITS[-5:]), set(range(24, 29)))
+        for bit in range(24, 29):
+            self.assertEqual(validate_rules(1 << bit), 1 << bit)
+        self.store.create('qol', rules=97)
+        with self.assertRaises(ProtocolError):
+            self.store.event('qol', 1, 1, 'settings', [DEFAULT_RULES, 1])
+        self.store.configure('qol', 1, DEFAULT_RULES)
+        self.store.event('qol', 0, 1, 'confirm', [DEFAULT_RULES, 1])
+        self.store.event('qol', 1, 1, 'confirm', [DEFAULT_RULES, 1])
+        with self.assertRaises(ProtocolError):
+            self.store.configure('qol', 1, 97)
+
     def test_invalid_start_options_rejected(self):
         from soullink.relay.model import START_OPTIONS
-        for rules in (1 << 24, START_OPTIONS | (3 << 14), START_OPTIONS | (20 << 18), 1 << 16):
+        for rules in (1 << 29, START_OPTIONS | (3 << 14), START_OPTIONS | (20 << 18), 1 << 16):
             with self.subTest(rules=rules), self.assertRaises(ProtocolError):
                 self.store.create('invalid', rules=rules)
 
