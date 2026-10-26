@@ -2,6 +2,7 @@
 #include <mgba/core/core.h>
 #include <mgba/core/log.h>
 #include <mgba/core/scripting.h>
+#include <mgba/core/timing.h>
 #include <mgba/script/context.h>
 #include <mgba/internal/arm/arm.h>
 #include <mgba/internal/arm/isa-inlines.h>
@@ -29,6 +30,9 @@ void sl_free(struct Harness *h) { if (h->scripted) { mScriptContextDetachCore(&h
 void sl_run(struct Harness *h, unsigned count, unsigned keys) {
     h->core->setKeys(h->core, keys);
     while (count--) h->core->runFrame(h->core);
+}
+uint64_t sl_cycles(struct Harness *h) {
+    return mTimingGlobalTime(h->core->timing);
 }
 unsigned sl_read(struct Harness *h, unsigned address, unsigned width) {
     if (width == 1) return h->core->busRead8(h->core,address);

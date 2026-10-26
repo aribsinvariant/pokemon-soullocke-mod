@@ -467,7 +467,7 @@ static bool8 Approved(u16 id)
     return id && id <= SOUL_AREAS && (BOX->mons[id-1].active & 1);
 }
 
-static bool8 PartyMatches(void)
+static bool8 PartyMatches(const u16 *partyIds)
 {
     u16 i, j, id;
     if (!(SAVE->rules & (SOUL_PAIRED_PARTY | SOUL_TEAM_TYPE))) return TRUE;
@@ -475,12 +475,12 @@ static bool8 PartyMatches(void)
     {
         if (!(BOX->mons[i].active & 1) || SAVE->state[i] >= SOUL_DEAD) continue;
         for (j = 0; j < PARTY_SIZE; j++)
-            if (GetMonData(&gPlayerParty[j], MON_DATA_SOUL_ID) == i+1) break;
+            if (partyIds[j] == i+1) break;
         if (j == PARTY_SIZE) return FALSE;
     }
     for (i = 0; i < PARTY_SIZE; i++)
     {
-        id = GetMonData(&gPlayerParty[i], MON_DATA_SOUL_ID);
+        id = partyIds[i];
         if (id && id <= SOUL_AREAS && SAVE->state[id-1] == SOUL_LINKED && !Approved(id)) return FALSE;
     }
     return TRUE;
@@ -547,6 +547,7 @@ static void ReconcileParty(void)
 bool8 SoulLink_Overworld(void)
 {
     u16 i, j, id;
+    u16 partyIds[PARTY_SIZE];
     bool8 alive = FALSE, any = FALSE;
     if (!SoulLink_Enabled())
         return FALSE;
@@ -588,7 +589,11 @@ bool8 SoulLink_Overworld(void)
         SoulLink_OpenMenu();
         return TRUE;
     }
-    if (!PartyMatches())
+    // Soul IDs are encrypted: decrypt each slot once, after reconciliation may
+    // have changed membership, and share the snapshot across the frame's checks.
+    for (i = 0; i < PARTY_SIZE; i++)
+        partyIds[i] = GetMonData(&gPlayerParty[i], MON_DATA_SOUL_ID);
+    if (!PartyMatches(partyIds))
     {
         // Still permit PC interaction and menus while waiting for party agreement.
         gMain.newKeys &= A_BUTTON | START_BUTTON;
@@ -596,7 +601,7 @@ bool8 SoulLink_Overworld(void)
     }
     for (i = 0; i < PARTY_SIZE; i++)
     {
-        id = GetMonData(&gPlayerParty[i], MON_DATA_SOUL_ID);
+        id = partyIds[i];
         if (id && id <= SOUL_AREAS)
         {
             any = TRUE;

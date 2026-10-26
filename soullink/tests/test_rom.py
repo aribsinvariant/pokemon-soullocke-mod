@@ -13,6 +13,7 @@ class RomTests(unittest.TestCase):
         cls.lib = C.CDLL(os.environ['SOUL_ADAPTER'])
         cls.lib.sl_new.argtypes = [C.c_char_p]; cls.lib.sl_new.restype = C.c_void_p
         cls.lib.sl_run.argtypes = [C.c_void_p,C.c_uint,C.c_uint]
+        cls.lib.sl_cycles.argtypes = [C.c_void_p]; cls.lib.sl_cycles.restype = C.c_uint64
         cls.lib.sl_read.argtypes = [C.c_void_p,C.c_uint,C.c_uint]; cls.lib.sl_read.restype = C.c_uint
         cls.lib.sl_write.argtypes = [C.c_void_p,C.c_uint,C.c_uint,C.c_uint]
         cls.lib.sl_call.argtypes = [C.c_void_p,C.c_uint,C.POINTER(C.c_uint),C.c_uint]; cls.lib.sl_call.restype = C.c_uint
@@ -436,6 +437,56 @@ class RomTests(unittest.TestCase):
         return [self.call('GetMonData3',self.party+i*100,self.fields['MON_DATA_SOUL_ID'],0)
                 for i in range(self.read(self.symbols['gPlayerPartyCount'],1))]
 
+    def test_stable_overworld_party_cycle_budget(self):
+        self.write(self.save + 12, 32)
+        self.call('ScriptContext_Init')
+        self.call('UnlockPlayerFieldControls')
+        ids = (512, 19, 18, 20, 61, 60)
+        for slot, soul_id in enumerate(ids):
+            with self.subTest(party_size=slot + 1):
+                self.linked_party_mon(slot, soul_id)
+                self.call('SoulLink_Overworld')  # Finish the membership change first.
+                for _ in range(3):
+                    before = self.lib.sl_cycles(self.h)
+                    self.call('SoulLink_Overworld')
+                    cycles = self.lib.sl_cycles(self.h) - before
+                    # Leave over half the GBA's 280896-cycle frame for the game.
+                    self.assertLess(cycles, 280896 // 2)
+                self.assertEqual(self.party_ids(), list(ids[:slot + 1]))
+
+    def test_overworld_membership_snapshot_refreshes_each_frame(self):
+        self.write(self.save + 12, 32)
+        self.call('ScriptContext_Init')
+        self.call('UnlockPlayerFieldControls')
+        self.linked_party_mon(0, 512)
+        self.linked_party_mon(1, 20)
+        self.call('SoulLink_Overworld')
+        main = self.symbols['gMain']
+
+        def check_keys(matches):
+            self.write(main + 0x2c, 0x10, 2)  # Hold right.
+            self.write(main + 0x2e, 0x19, 2)  # Right, A, Start.
+            self.call('SoulLink_Overworld')
+            self.assertEqual(self.read(main + 0x2c, 2), 0x10 if matches else 0)
+            self.assertEqual(self.read(main + 0x2e, 2), 0x19 if matches else 9)
+
+        check_keys(True)
+        # Change local identity without changing the approved membership hash.
+        self.linked_party_mon(1, 21)
+        self.write(self.box + 160 + 20 * 18 + 17, 0, 1)
+        check_keys(False)
+        self.linked_party_mon(1, 20)
+        check_keys(True)
+        # An extra linked member must also restrict movement.
+        self.linked_party_mon(2, 21)
+        self.write(self.box + 160 + 20 * 18 + 17, 0, 1)
+        check_keys(False)
+        # Pending or dead unapproved members do not require party agreement.
+        for state in (1, 3):
+            self.write(self.save + 20 + 20, state, 1)
+            check_keys(True)
+        self.assertEqual(self.read(self.party + 200 + 86, 2), 0)
+
     def test_catch_preserves_lead_and_existing_party_order(self):
         for rule in (32,16):  # Paired party and team type rules both reconcile membership.
             with self.subTest(rule=rule):
@@ -456,6 +507,28 @@ class RomTests(unittest.TestCase):
                 self.linked_party_mon(2,5)
                 self.call('SoulLink_Overworld')
                 self.assertEqual(self.party_ids(),[20,512,5])
+
+    def test_unresolved_reconciliation_recovers_when_mon_arrives(self):
+        self.write(self.save + 12, 32)
+        self.linked_party_mon(0, 512)
+        self.call('ScriptContext_Init')
+        self.call('UnlockPlayerFieldControls')
+        self.call('SoulLink_Overworld')
+        self.write(self.box + 160 + 19 * 18 + 17, 1, 1)
+        self.write(self.save + 20 + 19, 2, 1)
+        for _ in range(2):
+            self.call('SoulLink_Overworld')
+            self.assertEqual(self.party_ids(), [512])
+        self.linked_party_mon(1, 20)
+        self.call('SetBoxMonAt', 0, 0, self.party + 100)
+        self.call('ZeroMonData', self.party + 100)
+        self.write(self.symbols['gPlayerPartyCount'], 1, 1)
+        main = self.symbols['gMain']
+        self.write(main + 0x2c, 0x10, 2)
+        self.call('SoulLink_Overworld')
+        self.assertEqual(self.party_ids(), [512, 20])
+        # Membership checks must see the withdrawal in this same update.
+        self.assertEqual(self.read(main + 0x2c, 2), 0x10)
 
     def test_party_change_keeps_survivor_order_and_appends_withdrawals(self):
         self.write(self.save+12,32)

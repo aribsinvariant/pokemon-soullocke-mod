@@ -64,6 +64,8 @@ SOUL_ADAPTER=/tmp/soullink-emulator.so SOUL_ROM=$PWD/pokeemerald_modern.gba SOUL
 
 The adapter invokes compiled functions inside mGBA with controlled inputs; it does not replace the rules with a host-side imitation. The Lua unit test checks fragmented messages and partial sends using a socket/memory test double. The end-to-end integration test additionally runs two actual mGBA Lua engines through two local connectors and a TCP relay, then verifies pairing and deferred linked death in the compiled ROM.
 
+The ROM tests also measure emulated CPU cycles for stable overworld parties of one through six Pokémon. After initial reconciliation, `SoulLink_Overworld` must use less than half of the GBA's 280896-cycle frame, leaving time for normal field processing. Party membership and death checks share a fresh snapshot of the six encrypted Soul IDs on each update. This budget does not cover membership changes or unresolved reconciliation, which can scan PC storage; those paths have separate correctness tests. Rebuild the test adapter when its exported functions change.
+
 ## Acceptance still requiring manual play
 
 Run two desktop mGBA instances through setup, both starter battles, an area capture, an incompatible reroll, a PC party change, a linked death during the partner's battle, a disconnect, and a saved-game reload. Check sprites while walking, cycling, surfing, entering buildings, and changing maps. Complete a campaign before treating this as a stable release. Emulator function tests cannot establish that every story script and UI transition is safe.
